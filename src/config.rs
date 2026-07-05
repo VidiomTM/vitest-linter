@@ -55,10 +55,13 @@ struct RawBannedSingleton {
 pub struct Config {
     pub deps: DepsConfig,
     pub rules: RulesConfig,
+    /// Cached `tsconfig.json` for path-alias resolution, loaded once at
+    /// construction time from the config root directory.
+    tsconfig: Option<TsConfig>,
 }
 
 /// Per-rule severity overrides and enable/disable settings.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct RulesConfig {
     /// Per-rule severity overrides. Key = rule ID, value = "off" | "info" | "warning" | "error"
     pub select: HashMap<String, String>,
@@ -125,27 +128,29 @@ impl Config {
     /// Load `.vitest-linter.toml` by walking up from `start` until found, or
     /// return an empty config when no file exists. Also checks `package.json`
     /// for a `vitest-linter` key and merges it.
-    #[allow(clippy::missing_errors_doc)]
     pub fn load_from(start: &Path) -> Result<Self> {
-        let mut config = if let Some(found) = find_config(start) {
-            Self::from_path(&found)?
+        let (mut config, config_root) = if let Some(found) = find_config(start) {
+            let root = found
+                .parent()
+                .map(Path::to_path_buf)
+                .unwrap_or_else(|| start.to_path_buf());
+            (Self::from_path(&found)?, root)
         } else {
-            Self::default()
+            (Self::default(), start.to_path_buf())
         };
 
+        config.tsconfig = TsConfig::load_from(&config_root);
         merge_package_json_overrides(&mut config, start);
 
         Ok(config)
     }
 
-    #[allow(clippy::missing_errors_doc)]
     pub fn from_path(path: &Path) -> Result<Self> {
         let raw_text = std::fs::read_to_string(path)
             .with_context(|| format!("reading config {}", path.display()))?;
         Self::parse_toml(&raw_text)
     }
 
-    #[allow(clippy::missing_errors_doc)]
     pub fn parse_toml(text: &str) -> Result<Self> {
         let raw: RawConfig =
             toml::from_str(text).with_context(|| "parsing vitest-linter config")?;
@@ -193,6 +198,7 @@ impl Config {
                     })
                     .unwrap_or_default(),
             },
+            tsconfig: None,
         })
     }
 }
@@ -207,16 +213,7 @@ impl Default for Config {
                 integration_test_glob,
             },
             rules: RulesConfig::default(),
-        }
-    }
-}
-
-#[allow(clippy::derivable_impls)]
-impl Default for RulesConfig {
-    fn default() -> Self {
-        Self {
-            select: HashMap::new(),
-            dep001: Dep001RuleConfig::default(),
+            tsconfig: None,
         }
     }
 }
@@ -226,13 +223,10 @@ impl Config {
     /// Returns the path as-is if it cannot be resolved.
     #[must_use]
     pub fn resolve_module_path(&self, import_path: &str) -> String {
-        // Try tsconfig resolution if available
-        let project_root = std::env::current_dir().ok();
-        if let Some(root) = project_root {
-            if let Some(tsconfig) = TsConfig::load_from(&root) {
-                if let Some(resolved) = tsconfig.resolve(import_path, &root) {
-                    return resolved.to_string_lossy().to_string();
-                }
+        // Use the tsconfig cached at construction time if present.
+        if let Some(tsconfig) = &self.tsconfig {
+            if let Some(resolved) = tsconfig.resolve(import_path, Path::new(".")) {
+                return resolved.to_string_lossy().to_string();
             }
         }
         import_path.to_string()
@@ -549,5 +543,77 @@ names = ["orchestrator"]
         let dir = tempfile::TempDir::new().unwrap();
         let ts = TsConfig::load_from(dir.path());
         assert!(ts.is_none());
+    }
+
+    #[test]
+    fn tsconfig_specific_alias_takes_priority_over_wildcard() {
+        // With both `@/*` and `@utils/*` aliases, importing `@utils/foo` must
+        // resolve via the more specific `@utils/*` alias (lib/utils/foo), not
+        // the broader `@/*` alias (src/utils/foo). A naive glob match on `@/**`
+        // would also match `@utils/foo`, so resolution must prefer the longest
+        // matching alias prefix.
+        let dir = tempfile::TempDir::new().unwrap();
+        let tsconfig = r#"{
+            "compilerOptions": {
+                "baseUrl": ".",
+                "paths": {
+                    "@/*": ["src/*"],
+                    "@utils/*": ["lib/utils/*"]
+                }
+            }
+        }"#;
+        std::fs::write(dir.path().join("tsconfig.json"), tsconfig).unwrap();
+
+        let utils_dir = dir.path().join("lib/utils");
+        std::fs::create_dir_all(&utils_dir).unwrap();
+        std::fs::write(utils_dir.join("foo.ts"), "export const x = 1;").unwrap();
+
+        let src_utils_dir = dir.path().join("src/utils");
+        std::fs::create_dir_all(&src_utils_dir).unwrap();
+        std::fs::write(src_utils_dir.join("foo.ts"), "export const WRONG = 1;").unwrap();
+
+        let ts = TsConfig::load_from(dir.path()).unwrap();
+        let resolved = ts.resolve("@utils/foo", dir.path());
+        assert!(resolved.is_some(), "expected @utils/foo to resolve");
+        let resolved = resolved.unwrap();
+        assert!(
+            resolved.ends_with("lib/utils/foo.ts"),
+            "expected specific alias @utils/* to win, got {}",
+            resolved.display()
+        );
+    }
+
+    #[test]
+    fn config_resolve_module_path_uses_cached_tsconfig() {
+        // `Config::load_from` must cache the tsconfig found at the config root
+        // and `resolve_module_path` must use that cache rather than re-reading
+        // from disk (e.g. from the process cwd) on every call.
+        //
+        // We build a config rooted at `dir` (which has a tsconfig with a
+        // `@/*` alias) and then assert resolution works even though the
+        // process cwd has no tsconfig. A regression that re-reads tsconfig
+        // from `Path::new(".")` would return `None` and fail to resolve.
+        let dir = tempfile::TempDir::new().unwrap();
+        let tsconfig = r#"{
+            "compilerOptions": {
+                "baseUrl": ".",
+                "paths": {
+                    "@/*": ["src/*"]
+                }
+            }
+        }"#;
+        std::fs::write(dir.path().join("tsconfig.json"), tsconfig).unwrap();
+        std::fs::write(dir.path().join(CONFIG_FILE_NAME), "").unwrap();
+
+        let src_dir = dir.path().join("src/components");
+        std::fs::create_dir_all(&src_dir).unwrap();
+        std::fs::write(src_dir.join("Button.ts"), "export default {};").unwrap();
+
+        let config = Config::load_from(dir.path()).unwrap();
+        let resolved = config.resolve_module_path("@/components/Button");
+        assert!(
+            resolved.ends_with("src/components/Button.ts"),
+            "expected cached tsconfig to resolve @/components/Button, got {resolved}"
+        );
     }
 }

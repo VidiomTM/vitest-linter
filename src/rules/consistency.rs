@@ -99,10 +99,26 @@ impl Rule for ConsistentVitestViRule {
             .any(|imp| imp.source == "vitest" && imp.named.iter().any(|n| n == "vi"))
             || source.lines().any(|line| {
                 let trimmed = line.trim();
-                (trimmed.starts_with("import ") || trimmed.starts_with("import{"))
-                    && trimmed.contains("vi")
-                    && trimmed.contains("from")
-                    && (trimmed.contains("'vitest'") || trimmed.contains("\"vitest\""))
+                if !(trimmed.starts_with("import ") || trimmed.starts_with("import{"))
+                    || !trimmed.contains("from")
+                {
+                    return false;
+                }
+                if !(trimmed.contains("'vitest'") || trimmed.contains("\"vitest\"")) {
+                    return false;
+                }
+                // Match the `vi` named binding exactly, not substrings like
+                // `visit` or `evaluate`. Accept `{ vi`, `, vi`, `vi,`, and `vi }`
+                // so that multi-line and single-binding imports both work.
+                let binding = trimmed.split("from").next().unwrap_or("");
+                binding.split('{').nth(1).is_some_and(|inner| {
+                    let inner = inner.split('}').next().unwrap_or("");
+                    inner.split(',').any(|tok| {
+                        tok.trim().strip_prefix("vi").is_some_and(|rest| {
+                            rest.trim().is_empty() || rest.trim().starts_with(" as ")
+                        })
+                    })
+                })
             });
 
         let has_vitest_namespace = module

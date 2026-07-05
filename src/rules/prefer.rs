@@ -1,6 +1,55 @@
 use crate::models::{Category, HookKind, ModuleGraph, ParsedModule, Severity, Violation};
 use crate::rules::Rule;
 
+/// True when `arg` is exactly `keyword` (possibly followed by `)`, `,`, or
+/// trailing whitespace), so that identifiers like `trueValue` or `nullish`
+/// are NOT mistaken for the literal keyword `true`/`null`.
+fn is_exact_keyword(arg: &str, keyword: &str) -> bool {
+    if let Some(rest) = arg.strip_prefix(keyword) {
+        rest.is_empty()
+            || rest.starts_with(')')
+            || rest.starts_with(',')
+            || rest.starts_with(';')
+            || rest.starts_with(' ')
+            || rest.starts_with('\t')
+            || rest.starts_with("//")
+    } else {
+        false
+    }
+}
+
+/// True when `arg` is a single numeric literal (e.g. `123`, `3.14`, `-1`),
+/// so that identifiers starting with a digit like `123abc` are NOT matched.
+/// Trailing `)` / `,` / whitespace (from the call's closing syntax) are
+/// tolerated so `123)` and `3.14,` are still recognized.
+fn is_numeric_literal(arg: &str) -> bool {
+    let arg = arg.trim_end_matches([')', ',', ';', ' ', '\t']);
+    if arg.is_empty() {
+        return false;
+    }
+    let bytes = arg.as_bytes();
+    let start = if bytes[0] == b'-' || bytes[0] == b'+' {
+        if bytes.len() == 1 {
+            return false;
+        }
+        1
+    } else {
+        0
+    };
+    let mut seen_digit = false;
+    let mut seen_dot = false;
+    for &b in &bytes[start..] {
+        if b.is_ascii_digit() {
+            seen_digit = true;
+        } else if b == b'.' && !seen_dot {
+            seen_dot = true;
+        } else {
+            return false;
+        }
+    }
+    seen_digit
+}
+
 // ---------------------------------------------------------------------------
 // VITEST-PREF-001: PreferToBeRule
 // ---------------------------------------------------------------------------
@@ -39,12 +88,12 @@ impl Rule for PreferToBeRule {
                 let is_primitive_like = arg.starts_with('"')
                     || arg.starts_with('\'')
                     || arg.starts_with('`')
-                    || arg.starts_with("true")
-                    || arg.starts_with("false")
-                    || arg.starts_with("null")
-                    || arg.starts_with("undefined")
-                    || arg.starts_with("NaN")
-                    || arg.chars().next().is_some_and(|c| c.is_ascii_digit());
+                    || is_exact_keyword(arg, "true")
+                    || is_exact_keyword(arg, "false")
+                    || is_exact_keyword(arg, "null")
+                    || is_exact_keyword(arg, "undefined")
+                    || is_exact_keyword(arg, "NaN")
+                    || is_numeric_literal(arg);
                 if is_primitive_like {
                     violations.push(Violation {
                         rule_id: self.id().to_string(),

@@ -13,7 +13,7 @@ use anyhow::Result;
 use colored::Colorize;
 
 use engine::LintEngine;
-use models::{Diagnostic, Severity};
+use models::Severity;
 
 fn get_changed_files(base: &str) -> Result<Vec<PathBuf>> {
     let output = std::process::Command::new("git")
@@ -46,7 +46,6 @@ fn get_changed_files(base: &str) -> Result<Vec<PathBuf>> {
 
 /// Run the CLI with the given arguments and return whether error-severity
 /// violations were found.
-#[allow(clippy::missing_errors_doc)]
 pub fn run_cli(
     paths: &[PathBuf],
     format: &str,
@@ -76,12 +75,12 @@ pub fn run_cli(
     };
 
     let engine = LintEngine::new(unstable_rules)?;
-    let (violations, diagnostics) = engine.lint_paths(&effective_paths)?;
+    let violations = engine.lint_paths(&effective_paths)?;
 
     match format {
         "json" => output_json(&violations, output)?,
         "sarif" => output_sarif(&violations, output)?,
-        _ => output_human(&violations, &diagnostics, output)?,
+        _ => output_human(&violations, output)?,
     }
 
     let has_errors = violations.iter().any(|v| v.severity == Severity::Error);
@@ -107,19 +106,11 @@ fn output_sarif(violations: &[models::Violation], output: Option<&Path>) -> Resu
     Ok(())
 }
 
-fn output_human(
-    violations: &[models::Violation],
-    diagnostics: &[Diagnostic],
-    output: Option<&Path>,
-) -> Result<()> {
+fn output_human(violations: &[models::Violation], output: Option<&Path>) -> Result<()> {
     let mut out: Box<dyn Write> = match output {
         Some(path) => Box::new(fs::File::create(path)?),
         None => Box::new(std::io::stdout()),
     };
-
-    for diag in diagnostics {
-        writeln!(out, "{}: {}", "Info".blue().bold(), diag.message)?;
-    }
 
     if violations.is_empty() {
         writeln!(out, "{} No test smells detected.", "\u{2713}".green())?;
@@ -212,7 +203,7 @@ fn build_sarif(violations: &[models::Violation]) -> serde_json::Value {
                 "driver": {
                     "name": "vitest-linter",
                     "version": env!("CARGO_PKG_VERSION"),
-                    "informationUri": "https://github.com/Jonathangadeaharder/vitest-linter",
+                    "informationUri": "https://github.com/VidiomTM/vitest-linter",
                     "rules": violations.iter().map(|v| serde_json::json!({
                         "id": v.rule_id,
                         "name": v.rule_name,

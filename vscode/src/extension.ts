@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { type ChildProcess, execFile } from "node:child_process";
 import * as path from "node:path";
 import * as vscode from "vscode";
 
@@ -25,7 +25,7 @@ const SEVERITY_MAP: Record<string, vscode.DiagnosticSeverity> = {
 
 let diagnosticCollection: vscode.DiagnosticCollection;
 let lintTimeout: ReturnType<typeof setTimeout> | undefined;
-const activeProcesses = new Map<string, import("node:child_process").ChildProcess>();
+const activeProcesses = new Map<string, ChildProcess>();
 
 export function activate(context: vscode.ExtensionContext): void {
   diagnosticCollection =
@@ -104,23 +104,30 @@ function isTestFile(filePath: string): boolean {
   return TEST_FILE_PATTERN.test(filePath);
 }
 
+type SeverityOverride =
+  | { kind: "off" }
+  | { kind: "severity"; severity: vscode.DiagnosticSeverity };
+
 function getSeverityOverride(
   ruleId: string,
   overrides: Record<string, string>,
-): vscode.DiagnosticSeverity | null {
+): SeverityOverride | null {
   const override = overrides[ruleId];
   if (!override) {
     return null;
   }
   switch (override) {
     case "off":
-      return null as unknown as vscode.DiagnosticSeverity;
+      return { kind: "off" };
     case "info":
-      return vscode.DiagnosticSeverity.Information;
+      return {
+        kind: "severity",
+        severity: vscode.DiagnosticSeverity.Information,
+      };
     case "warning":
-      return vscode.DiagnosticSeverity.Warning;
+      return { kind: "severity", severity: vscode.DiagnosticSeverity.Warning };
     case "error":
-      return vscode.DiagnosticSeverity.Error;
+      return { kind: "severity", severity: vscode.DiagnosticSeverity.Error };
     default:
       return null;
   }
@@ -212,15 +219,14 @@ function lintDocument(doc: vscode.TextDocument): void {
           v.rule_id,
           config.severityOverrides,
         );
-        if (
-          severityOverride === (null as unknown as vscode.DiagnosticSeverity) &&
-          config.severityOverrides[v.rule_id] === "off"
-        ) {
+        if (severityOverride?.kind === "off") {
           continue;
         }
 
         const severity =
-          severityOverride ??
+          (severityOverride?.kind === "severity"
+            ? severityOverride.severity
+            : undefined) ??
           SEVERITY_MAP[v.severity] ??
           vscode.DiagnosticSeverity.Warning;
         const line = Math.max(0, v.line - 1);
@@ -243,7 +249,9 @@ function lintDocument(doc: vscode.TextDocument): void {
     },
   );
   activeProcesses.set(filePath, proc);
-}(): void {
+}
+
+function lintWorkspace(): void {
   const config = getConfig();
   if (!config.enable) {
     return;
@@ -333,12 +341,14 @@ function lintDocument(doc: vscode.TextDocument): void {
               v.rule_id,
               config.severityOverrides,
             );
-            if (config.severityOverrides[v.rule_id] === "off") {
+            if (severityOverride?.kind === "off") {
               continue;
             }
 
             const severity =
-              severityOverride ??
+              (severityOverride?.kind === "severity"
+                ? severityOverride.severity
+                : undefined) ??
               SEVERITY_MAP[v.severity] ??
               vscode.DiagnosticSeverity.Warning;
             const line = Math.max(0, v.line - 1);

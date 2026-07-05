@@ -1,15 +1,15 @@
-const { execFileSync, execSync } = require("child_process");
-const fs = require("fs");
-const https = require("https");
-const path = require("path");
-const os = require("os");
+const { execFileSync, execSync } = require("node:child_process");
+const fs = require("node:fs");
+const https = require("node:https");
+const path = require("node:path");
+const os = require("node:os");
 
-const REPO = "Jonathangadeaharder/vitest-linter";
+const REPO = "VidiomTM/vitest-linter";
 const BIN_NAME = "vitest-linter";
 
 function getPackageVersion() {
   const pkg = JSON.parse(
-    fs.readFileSync(path.join(__dirname, "package.json"), "utf8")
+    fs.readFileSync(path.join(__dirname, "package.json"), "utf8"),
   );
   return pkg.version;
 }
@@ -43,10 +43,8 @@ function download(url, dest) {
   return new Promise((resolve, reject) => {
     const request = (u, redirects) => {
       if (redirects > 5) return reject(new Error("Too many redirects"));
-      https.get(
-        u,
-        { headers: { "User-Agent": "node" } },
-        (res) => {
+      https
+        .get(u, { headers: { "User-Agent": "node" } }, (res) => {
           if (
             res.statusCode >= 300 &&
             res.statusCode < 400 &&
@@ -64,8 +62,8 @@ function download(url, dest) {
             resolve();
           });
           stream.on("error", reject);
-        }
-      ).on("error", reject);
+        })
+        .on("error", reject);
     };
     request(url, 0);
   });
@@ -73,15 +71,19 @@ function download(url, dest) {
 
 function extract(archive, destDir) {
   if (os.platform() === "win32") {
-    execFileSync("powershell", [
-      "-Command",
-      "Expand-Archive",
-      "-Path",
-      archive,
-      "-DestinationPath",
-      destDir,
-      "-Force",
-    ], { stdio: "inherit" });
+    execFileSync(
+      "powershell",
+      [
+        "-Command",
+        "Expand-Archive",
+        "-Path",
+        archive,
+        "-DestinationPath",
+        destDir,
+        "-Force",
+      ],
+      { stdio: "inherit" },
+    );
   } else {
     execFileSync("tar", ["-xzf", archive, "-C", destDir], { stdio: "inherit" });
   }
@@ -92,7 +94,7 @@ async function main() {
   const target = getTarget();
   const binDir = path.join(__dirname, "bin");
   const ext = os.platform() === "win32" ? ".exe" : "";
-  const binPath = path.join(binDir, `${BIN_NAME}${ext}`);
+  const binPath = path.join(binDir, `${BIN_NAME}-bin${ext}`);
 
   fs.mkdirSync(binDir, { recursive: true });
 
@@ -114,7 +116,7 @@ async function main() {
     if (!fs.existsSync(extracted)) {
       const entries = fs.readdirSync(tmpDir);
       const subDir = entries.find((e) =>
-        fs.statSync(path.join(tmpDir, e)).isDirectory()
+        fs.statSync(path.join(tmpDir, e)).isDirectory(),
       );
       if (subDir) {
         const inner = path.join(tmpDir, subDir, `${BIN_NAME}${ext}`);
@@ -128,7 +130,7 @@ async function main() {
 
     if (!fs.existsSync(binPath)) {
       throw new Error(
-        `Binary not found after extraction. Looked for ${binPath}`
+        `Binary not found after extraction. Looked for ${binPath}`,
       );
     }
 
@@ -139,10 +141,12 @@ async function main() {
     console.warn("Falling back to cargo install...");
     try {
       execSync("cargo install vitest-linter --locked", { stdio: "inherit" });
-      const cargoHome = process.env.CARGO_HOME || path.join(os.homedir(), ".cargo");
-      const cargoBin = os.platform() === "win32"
-        ? path.join(cargoHome, "bin", `${BIN_NAME}.exe`)
-        : path.join(cargoHome, "bin", BIN_NAME);
+      const cargoHome =
+        process.env.CARGO_HOME || path.join(os.homedir(), ".cargo");
+      const cargoBin =
+        os.platform() === "win32"
+          ? path.join(cargoHome, "bin", `${BIN_NAME}.exe`)
+          : path.join(cargoHome, "bin", BIN_NAME);
       if (fs.existsSync(cargoBin)) {
         fs.copyFileSync(cargoBin, binPath);
         console.log("Installed via cargo install.");
@@ -150,7 +154,7 @@ async function main() {
     } catch (cargoErr) {
       console.error(`cargo install also failed: ${cargoErr.message}`);
       console.error(
-        "Please install Rust (https://rustup.rs) or download the binary manually."
+        "Please install Rust (https://rustup.rs) or download the binary manually.",
       );
       process.exit(1);
     }

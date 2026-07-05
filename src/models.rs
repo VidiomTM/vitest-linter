@@ -109,7 +109,6 @@ mod tests {
 }
 
 #[derive(Debug, Clone)]
-#[allow(clippy::struct_excessive_bools)]
 pub struct TestBlock {
     pub name: String,
     pub file_path: PathBuf,
@@ -141,7 +140,6 @@ pub struct TestBlock {
 }
 
 #[derive(Debug, Clone)]
-#[allow(clippy::struct_excessive_bools)]
 pub struct DescribeBlock {
     pub name: String,
     pub file_path: PathBuf,
@@ -195,19 +193,6 @@ pub struct ExportEntry {
     pub name: String,
     pub kind: ExportKind,
     pub line: usize,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DiagnosticLevel {
-    Info,
-    Warning,
-}
-
-#[derive(Debug, Clone)]
-pub struct Diagnostic {
-    pub level: DiagnosticLevel,
-    pub message: String,
-    pub file_path: Option<PathBuf>,
 }
 
 #[derive(Debug, Default)]

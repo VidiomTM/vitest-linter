@@ -1,4 +1,3 @@
-const path = require("path");
 const { getViolations, clearCache } = require("./lib/runner");
 const ruleDefinitions = require("./lib/rules");
 
@@ -13,7 +12,7 @@ for (const def of ruleDefinitions) {
         description: def.description,
         category: "Test Smells",
         recommended: true,
-        url: `https://github.com/Jonathangadeaharder/vitest-linter#rule-${def.ruleId.toLowerCase()}`,
+        url: `https://github.com/VidiomTM/vitest-linter#rule-${def.ruleId.toLowerCase()}`,
       },
       schema: [],
     },
@@ -22,9 +21,7 @@ for (const def of ruleDefinitions) {
       return {
         Program() {
           const violations = getViolations(filePath);
-          const matched = violations.filter(
-            (v) => v.rule_id === def.ruleId,
-          );
+          const matched = violations.filter((v) => v.rule_id === def.ruleId);
           for (const v of matched) {
             context.report({
               loc: {
@@ -50,6 +47,9 @@ const plugin = {
   rules,
   configs: {},
   processors: {},
+  // Expose cache invalidation so consumers (e.g. watch mode) can reset
+  // the per-file violation cache between runs.
+  clearCache,
 };
 
 plugin.configs.recommended = {

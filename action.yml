@@ -44,9 +44,9 @@ runs:
           fi
           echo "Installing vitest-linter $VERSION..."
           if [ "$VERSION" = "latest" ]; then
-            curl --proto '=https' --tlsv1.2 -fsSL https://github.com/Jonathangadeaharder/vitest-linter/releases/latest/download/vitest-linter-installer.sh | sh
+            curl --proto '=https' --tlsv1.2 -fsSL https://github.com/VidiomTM/vitest-linter/releases/latest/download/vitest-linter-installer.sh | sh
           else
-            curl --proto '=https' --tlsv1.2 -fsSL https://github.com/Jonathangadeaharder/vitest-linter/releases/download/${VERSION}/vitest-linter-installer.sh | sh
+            curl --proto '=https' --tlsv1.2 -fsSL https://github.com/VidiomTM/vitest-linter/releases/download/${VERSION}/vitest-linter-installer.sh | sh
           fi
         fi
 
