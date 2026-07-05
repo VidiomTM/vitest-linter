@@ -39,7 +39,7 @@ test('uses setTimeout', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-FLK-001");
     assert!(v.is_some(), "Expected VITEST-FLK-001 violation");
     let v = v.unwrap();
@@ -64,7 +64,7 @@ test('uses Date.now', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-FLK-002");
     assert!(v.is_some(), "Expected VITEST-FLK-002 violation");
     assert_eq!(v.unwrap().rule_name, "DateMockRule");
@@ -87,7 +87,7 @@ test('uses Date.now with fake timers', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-FLK-002").is_none(),
         "Should not trigger VITEST-FLK-002 when useFakeTimers is present"
@@ -110,10 +110,37 @@ test('fetches data', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-FLK-003");
     assert!(v.is_some(), "Expected VITEST-FLK-003 violation");
     assert_eq!(v.unwrap().rule_name, "NetworkImportRule");
+}
+
+#[test]
+fn flk003_network_import_no_false_positive_on_substring() {
+    // A relative import whose path merely contains "http" as a substring
+    // (e.g. `./utils/https-helper`) must NOT trigger the network rule.
+    // The source specifier must match a known network library exactly.
+    let dir = TempDir::new().unwrap();
+    let path = write_fixture(
+        &dir,
+        "no-network.test.ts",
+        r#"
+import { httpsHelper } from './utils/https-helper';
+import { test, expect } from 'vitest';
+
+test('uses helper', () => {
+    expect(httpsHelper).toBeDefined();
+});
+"#,
+    );
+    let engine = LintEngine::new(true).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
+    let v = find_violation(&violations, "VITEST-FLK-003");
+    assert!(
+        v.is_none(),
+        "Relative import './utils/https-helper' must NOT trigger VITEST-FLK-003"
+    );
 }
 
 #[test]
@@ -131,7 +158,7 @@ test('does nothing', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-MNT-001");
     assert!(v.is_some(), "Expected VITEST-MNT-001 violation");
     let v = v.unwrap();
@@ -159,7 +186,7 @@ test('too many assertions', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-MNT-002");
     assert!(v.is_some(), "Expected VITEST-MNT-002 violation");
     assert_eq!(v.unwrap().rule_name, "MultipleExpectRule");
@@ -184,7 +211,7 @@ test('exactly five assertions', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-MNT-002").is_none(),
         "Exactly 5 assertions should NOT trigger MNT-002 (threshold is > 5)"
@@ -211,7 +238,7 @@ test('has conditional', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-MNT-003");
     assert!(v.is_some(), "Expected VITEST-MNT-003 violation");
     assert_eq!(v.unwrap().rule_name, "ConditionalLogicRule");
@@ -236,7 +263,7 @@ test('has try catch', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-MNT-004");
     assert!(v.is_some(), "Expected VITEST-MNT-004 violation");
     assert_eq!(v.unwrap().rule_name, "TryCatchRule");
@@ -257,7 +284,7 @@ test.skip('is skipped', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-MNT-005");
     assert!(v.is_some(), "Expected VITEST-MNT-005 violation");
     let v = v.unwrap();
@@ -288,7 +315,7 @@ describe('level1', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-STR-001");
     assert!(
         v.is_some(),
@@ -314,7 +341,7 @@ test('has return', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-STR-002");
     assert!(v.is_some(), "Expected VITEST-STR-002 violation");
     assert_eq!(v.unwrap().rule_name, "ReturnInTestRule");
@@ -377,7 +404,7 @@ test('clean test', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         violations.is_empty(),
         "Clean file should have no violations: {:?}",
@@ -405,7 +432,7 @@ test('b', () => { expect(1).toBe(1); });
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[dir.path().to_path_buf()]).unwrap();
+    let violations = engine.lint_paths(&[dir.path().to_path_buf()]).unwrap();
     assert!(
         violations.is_empty(),
         "Clean files should have no violations"
@@ -423,7 +450,7 @@ export function add(a: number, b: number) { return a + b; }
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[dir.path().to_path_buf()]).unwrap();
+    let violations = engine.lint_paths(&[dir.path().to_path_buf()]).unwrap();
     assert!(violations.is_empty());
 }
 
@@ -439,7 +466,7 @@ test('no assert', () => { const x = 1; });
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[dir.path().to_path_buf()]).unwrap();
+    let violations = engine.lint_paths(&[dir.path().to_path_buf()]).unwrap();
     assert!(
         violations.is_empty(),
         "Non-test files should be ignored even if they contain test-like code"
@@ -467,7 +494,7 @@ test('uses new Date', () => {
         "new Date() should set uses_datemock"
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(find_violation(&violations, "VITEST-FLK-002").is_some());
 }
 
@@ -740,7 +767,7 @@ test.only('focused test', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-MNT-007");
     assert!(
         v.is_some(),
@@ -768,7 +795,7 @@ describe.only('focused suite', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-MNT-007");
     assert!(
         v.is_some(),
@@ -791,7 +818,7 @@ it.only('focused it', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-MNT-007");
     assert!(v.is_some(), "Expected VITEST-MNT-007 violation for it.only");
 }
@@ -811,7 +838,7 @@ test('normal test', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-MNT-007").is_none(),
         "Should not trigger MNT-007 without .only"
@@ -836,7 +863,7 @@ test('has timeout', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-FLK-001").is_none(),
         "VITEST-FLK-001 should be suppressed by disable-next-line comment"
@@ -859,7 +886,7 @@ test('no assert', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-MNT-001").is_none(),
         "MNT-001 should be suppressed by disable-next-line with no rule ID"
@@ -885,7 +912,7 @@ test('has timeout', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-FLK-001").is_none(),
         "VITEST-FLK-001 should be suppressed by disable/enable range"
@@ -910,7 +937,7 @@ test('has timeout but no assertions', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-FLK-001").is_none(),
         "VITEST-FLK-001 should be suppressed"
@@ -938,7 +965,7 @@ test('uses fake timers', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-FLK-004");
     assert!(v.is_some(), "Expected VITEST-FLK-004 violation");
     assert_eq!(v.unwrap().rule_name, "FakeTimersCleanupRule");
@@ -964,7 +991,7 @@ test('uses fake timers safely', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-FLK-004").is_none(),
         "Should not trigger FLK-004 when afterEach has vi.useRealTimers()"
@@ -991,10 +1018,39 @@ test('uses fake timers', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-FLK-004").is_none(),
         "Should not trigger FLK-004 when afterEach has vi.useRealTimers()"
+    );
+}
+
+#[test]
+fn flk004_fake_timers_with_non_cleanup_after_each() {
+    // An afterEach that does NOT call a timer-cleanup method must not suppress
+    // the violation. This guards the && / == logic in FakeTimersCleanupRule.
+    let dir = TempDir::new().unwrap();
+    let path = write_fixture(
+        &dir,
+        "fake_timers_unrelated_after_each.test.ts",
+        r#"
+import { test, expect, vi, afterEach } from 'vitest';
+
+afterEach(() => {
+    vi.clearAllMocks();
+});
+
+test('uses fake timers', () => {
+    vi.useFakeTimers();
+    expect(true).toBe(true);
+});
+"#,
+    );
+    let engine = LintEngine::new(true).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
+    assert!(
+        find_violation(&violations, "VITEST-FLK-004").is_some(),
+        "Should trigger FLK-004 when afterEach has no timer cleanup"
     );
 }
 
@@ -1015,7 +1071,7 @@ test('uses mock', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-MNT-008");
     assert!(v.is_some(), "Expected VITEST-MNT-008 violation");
     assert_eq!(v.unwrap().rule_name, "MissingMockCleanupRule");
@@ -1042,7 +1098,7 @@ test('uses mock safely', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-MNT-008").is_none(),
         "Should not trigger MNT-008 when afterEach has vi.restoreAllMocks()"
@@ -1070,7 +1126,7 @@ test('uses mock safely', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-MNT-008").is_none(),
         "Should not trigger MNT-008 when beforeEach has vi.clearAllMocks()"
@@ -1092,7 +1148,7 @@ test('no mocks', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-MNT-008").is_none(),
         "Should not trigger MNT-008 without vi.mock()"
@@ -1118,7 +1174,7 @@ describe('outer', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-STR-001").is_none(),
         "2-level nesting should NOT trigger STR-001 (threshold is > 3)"
@@ -1150,7 +1206,7 @@ test('has switch', () => {
     assert_eq!(module.test_blocks.len(), 1);
     assert!(module.test_blocks[0].has_conditional_logic);
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(find_violation(&violations, "VITEST-MNT-003").is_some());
 }
 
@@ -1212,7 +1268,10 @@ test(testName, () => {
 "#,
     );
     let module = parse(&path);
-    assert_eq!(module.test_blocks.len(), 0);
+    // Dynamic (non-string-literal) test names are retained rather than
+    // silently dropped — the name falls back to the raw identifier text.
+    assert_eq!(module.test_blocks.len(), 1);
+    assert_eq!(module.test_blocks[0].name, "testName");
 }
 
 #[test]
@@ -1381,7 +1440,7 @@ test('works', () => {
 fn engine_empty_directory() {
     let dir = TempDir::new().unwrap();
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[dir.path().to_path_buf()]).unwrap();
+    let violations = engine.lint_paths(&[dir.path().to_path_buf()]).unwrap();
     assert!(violations.is_empty());
 }
 
@@ -1402,7 +1461,7 @@ test('clean', () => { expect(1).toBe(1); });
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[dir.path().to_path_buf()]).unwrap();
+    let violations = engine.lint_paths(&[dir.path().to_path_buf()]).unwrap();
     assert!(violations.is_empty());
     assert_eq!(violations.len(), 0);
 }
@@ -1599,7 +1658,7 @@ fn engine_non_test_file_as_path() {
         r#"export function add(a: number, b: number) { return a + b; }"#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(violations.is_empty());
 }
 
@@ -1867,7 +1926,7 @@ test('missing await', async () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-MNT-006");
     assert!(v.is_some(), "Expected VITEST-MNT-006 violation");
 }
@@ -1887,7 +1946,7 @@ test('bare expect', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-VAL-001");
     assert!(v.is_some(), "Expected VITEST-VAL-001 violation");
     let v = v.unwrap();
@@ -1911,7 +1970,7 @@ test('proper expect', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-VAL-001").is_none(),
         "Should not trigger VAL-001 when expect has assertion method"
@@ -1933,7 +1992,7 @@ test('return expect', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-VAL-002");
     assert!(v.is_some(), "Expected VITEST-VAL-002 violation");
     let v = v.unwrap();
@@ -1956,7 +2015,7 @@ test('await expect', async () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-VAL-002").is_none(),
         "Should not trigger VAL-002 when using await"
@@ -1980,7 +2039,7 @@ describe('async describe', async () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-VAL-003");
     assert!(v.is_some(), "Expected VITEST-VAL-003 violation");
     let v = v.unwrap();
@@ -2005,7 +2064,7 @@ describe('sync describe', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-VAL-003").is_none(),
         "Should not trigger VAL-003 for sync describe"
@@ -2027,7 +2086,7 @@ test(`template title`, () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-VAL-004");
     assert!(
         v.is_some(),
@@ -2055,7 +2114,7 @@ describe('', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-VAL-004");
     assert!(
         v.is_some(),
@@ -2080,7 +2139,7 @@ describe('proper title', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-VAL-004").is_none(),
         "Should not trigger VAL-004 for string titles"
@@ -2104,7 +2163,7 @@ test('async wrapper', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-VAL-005");
     assert!(v.is_some(), "Expected VITEST-VAL-005 violation");
     let v = v.unwrap();
@@ -2127,7 +2186,7 @@ test('sync expect', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-VAL-005").is_none(),
         "Should not trigger VAL-005 for sync expect"
@@ -2157,7 +2216,7 @@ test('inside test', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-NO-001");
     assert!(v.is_some(), "Expected VITEST-NO-001 violation");
     assert_eq!(v.unwrap().rule_name, "NoStandaloneExpectRule");
@@ -2178,7 +2237,7 @@ test('ok', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-NO-001").is_none(),
         "Should not trigger NO-001 when expect is inside test"
@@ -2201,7 +2260,7 @@ test('same title', () => { expect(2).toBe(2); });
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-NO-002");
     assert!(v.is_some(), "Expected VITEST-NO-002 violation");
     assert_eq!(v.unwrap().rule_name, "NoIdenticalTitleRule");
@@ -2221,7 +2280,7 @@ test('second', () => { expect(2).toBe(2); });
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-NO-002").is_none(),
         "Should not trigger NO-002 for unique titles"
@@ -2247,7 +2306,7 @@ test('active', () => { expect(1).toBe(1); });
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-NO-003");
     assert!(v.is_some(), "Expected VITEST-NO-003 violation");
     assert_eq!(v.unwrap().rule_name, "NoCommentedOutTestsRule");
@@ -2266,10 +2325,38 @@ test('active', () => { expect(1).toBe(1); });
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-NO-003").is_none(),
         "Should not trigger NO-003 without commented tests"
+    );
+}
+
+#[test]
+fn no003_commented_test_no_space_after_marker_triggers() {
+    // A commented-out test with no space after `//` (e.g. `//test(`) must
+    // still be detected. Guards against the prior false negative where only
+    // `// test(` (with a space) matched the pattern set.
+    let dir = TempDir::new().unwrap();
+    let path = write_fixture(
+        &dir,
+        "commented_no_space.test.ts",
+        r#"
+import { test, expect } from 'vitest';
+
+//test('disabled', () => {
+//    expect(1).toBe(1);
+//});
+
+test('active', () => { expect(1).toBe(1); });
+"#,
+    );
+    let engine = LintEngine::new(true).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
+    let v = find_violation(&violations, "VITEST-NO-003");
+    assert!(
+        v.is_some(),
+        "Expected VITEST-NO-003 for `//test(` even without a space after //"
     );
 }
 
@@ -2290,7 +2377,7 @@ fit('focused test', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-NO-005");
     assert!(v.is_some(), "Expected VITEST-NO-005 violation");
     assert_eq!(v.unwrap().rule_name, "NoTestPrefixesRule");
@@ -2311,7 +2398,7 @@ test('normal test', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-NO-005").is_none(),
         "Should not trigger NO-005 for normal test()"
@@ -2336,7 +2423,7 @@ test('ok', () => { expect(1).toBe(1); });
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-NO-006");
     assert!(v.is_some(), "Expected VITEST-NO-006 violation");
     assert_eq!(v.unwrap().rule_name, "NoDuplicateHooksRule");
@@ -2358,7 +2445,7 @@ test('ok', () => { expect(1).toBe(1); });
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-NO-006").is_none(),
         "Should not trigger NO-006 for single hooks"
@@ -2382,7 +2469,7 @@ test('bad import', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-NO-007");
     assert!(v.is_some(), "Expected VITEST-NO-007 violation");
     assert_eq!(v.unwrap().rule_name, "NoImportNodeTestRule");
@@ -2401,7 +2488,7 @@ test('ok', () => { expect(1).toBe(1); });
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-NO-007").is_none(),
         "Should not trigger NO-007 for vitest import"
@@ -2426,7 +2513,7 @@ test('snapshot with interpolation', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-NO-008");
     assert!(v.is_some(), "Expected VITEST-NO-008 violation");
     assert_eq!(v.unwrap().rule_name, "NoInterpolationInSnapshotsRule");
@@ -2447,7 +2534,7 @@ test('static snapshot', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-NO-008").is_none(),
         "Should not trigger NO-008 for static snapshot"
@@ -2477,7 +2564,7 @@ test('large snapshot', () => {{
     );
     let path = write_fixture(&dir, "largesnap.test.ts", &content);
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-NO-009");
     assert!(v.is_some(), "Expected VITEST-NO-009 violation");
     assert_eq!(v.unwrap().rule_name, "NoLargeSnapshotsRule");
@@ -2498,7 +2585,7 @@ test('small snapshot', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-NO-009").is_none(),
         "Should not trigger NO-009 for small snapshot"
@@ -2525,7 +2612,7 @@ test('uses done', (done) => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-NO-013");
     assert!(v.is_some(), "Expected VITEST-NO-013 violation");
     assert_eq!(v.unwrap().rule_name, "NoDoneCallbackRule");
@@ -2547,7 +2634,7 @@ test('uses async/await', async () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-NO-013").is_none(),
         "Should not trigger NO-013 for async/await"
@@ -2574,7 +2661,7 @@ test('conditional expect', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-NO-014");
     assert!(v.is_some(), "Expected VITEST-NO-014 violation");
     assert_eq!(v.unwrap().rule_name, "NoConditionalExpectRule");
@@ -2595,7 +2682,7 @@ test('unconditional expect', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-NO-014").is_none(),
         "Should not trigger NO-014 for unconditional expect"
@@ -2619,7 +2706,7 @@ test('use toBe', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-PREF-001");
     assert!(v.is_some(), "Expected VITEST-PREF-001 violation");
     assert_eq!(v.unwrap().rule_name, "PreferToBeRule");
@@ -2640,10 +2727,38 @@ test('use toBe', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-PREF-001").is_none(),
         "Should not trigger PREF-001 for toBe"
+    );
+}
+
+#[test]
+fn pref001_no_false_positive_on_keyword_prefix_identifier() {
+    // Identifiers that merely start with a keyword (trueValue, nullish,
+    // 123abc) must NOT be mistaken for primitive literals. Guards against
+    // the prior substring/prefix false positive.
+    let dir = TempDir::new().unwrap();
+    let path = write_fixture(
+        &dir,
+        "tobe_falsepos.test.ts",
+        r#"
+import { test, expect } from 'vitest';
+
+test('keyword-prefix identifiers', () => {
+    const trueValue = { a: 1 };
+    expect(x).toEqual(trueValue);
+    expect(y).toEqual(nullish);
+    expect(z).toEqual(123abc);
+});
+"#,
+    );
+    let engine = LintEngine::new(true).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
+    assert!(
+        find_violation(&violations, "VITEST-PREF-001").is_none(),
+        "Identifiers like trueValue/nullish/123abc must NOT trigger PREF-001"
     );
 }
 
@@ -2664,7 +2779,7 @@ test('use toContain', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-PREF-002");
     assert!(v.is_some(), "Expected VITEST-PREF-002 violation");
 }
@@ -2684,7 +2799,7 @@ test('use toContain', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-PREF-002").is_none(),
         "Should not trigger PREF-002 for toContain"
@@ -2708,7 +2823,7 @@ test('use toHaveLength', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-PREF-003");
     assert!(v.is_some(), "Expected VITEST-PREF-003 violation");
 }
@@ -2728,7 +2843,7 @@ test('use toHaveLength', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-PREF-003").is_none(),
         "Should not trigger PREF-003 for toHaveLength"
@@ -2753,7 +2868,7 @@ test('use spyOn', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-PREF-005");
     assert!(v.is_some(), "Expected VITEST-PREF-005 violation");
 }
@@ -2773,7 +2888,7 @@ test('use spyOn', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-PREF-005").is_none(),
         "Should not trigger PREF-005 for spyOn"
@@ -2797,7 +2912,7 @@ test('use toHaveBeenCalledOnce', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-PREF-007");
     assert!(v.is_some(), "Expected VITEST-PREF-007 violation");
 }
@@ -2817,7 +2932,7 @@ test('use toHaveBeenCalledOnce', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-PREF-007").is_none(),
         "Should not trigger PREF-007 for toHaveBeenCalledOnce"
@@ -2840,7 +2955,7 @@ beforeEach(() => {});
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-PREF-009");
     assert!(v.is_some(), "Expected VITEST-PREF-009 violation");
 }
@@ -2861,7 +2976,7 @@ beforeAll(() => {});
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-PREF-010");
     assert!(v.is_some(), "Expected VITEST-PREF-010 violation");
 }
@@ -2881,7 +2996,7 @@ test('todo this', () => {});
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-PREF-012");
     assert!(v.is_some(), "Expected VITEST-PREF-012 violation");
 }
@@ -2901,7 +3016,7 @@ vi.fn().mockImplementation(() => Promise.resolve(42));
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-PREF-013");
     assert!(v.is_some(), "Expected VITEST-PREF-013 violation");
 }
@@ -2923,7 +3038,7 @@ test('use resolves', async () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-PREF-014");
     assert!(v.is_some(), "Expected VITEST-PREF-014 violation");
 }
@@ -2944,7 +3059,7 @@ test('a', () => {});
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-REQ-001");
     assert!(v.is_some(), "Expected VITEST-REQ-001 violation");
 }
@@ -2968,7 +3083,7 @@ test('orphan', () => {});
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-REQ-002");
     assert!(v.is_some(), "Expected VITEST-REQ-002 violation");
 }
@@ -2990,7 +3105,7 @@ test('require message', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-REQ-003");
     assert!(v.is_some(), "Expected VITEST-REQ-003 violation");
 }
@@ -3011,9 +3126,146 @@ it('b', () => {});
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-CON-001");
     assert!(v.is_some(), "Expected VITEST-CON-001 violation");
+}
+
+#[test]
+fn con001_test_describe_with_it_triggers() {
+    // `test.describe(` is one of the `test.*` forms that should set has_test.
+    // Combined with `it(`, this must still trigger CON-001. Guards the `||`
+    // chain in ConsistentTestItRule (a `&&` mutant would drop test.describe).
+    let dir = TempDir::new().unwrap();
+    let path = write_fixture(
+        &dir,
+        "consistent_describe.test.ts",
+        r#"
+import { test, it } from 'vitest';
+
+test.describe('group', () => {
+    it('b', () => {});
+});
+"#,
+    );
+    let engine = LintEngine::new(true).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
+    let v = find_violation(&violations, "VITEST-CON-001");
+    assert!(
+        v.is_some(),
+        "Expected VITEST-CON-001 violation when mixing test.describe and it"
+    );
+}
+
+#[test]
+fn con001_each_test_form_with_it_triggers() {
+    // Every `test.*` form must set has_test=true, so that mixing it with
+    // `it(` triggers CON-001. This guards each `||` in the has_test chain
+    // against `&&` mutants, which would otherwise drop a single form.
+    let forms = [
+        "test.skip(",
+        "test.only(",
+        "test.todo(",
+        "test.concurrent(",
+        "test.each([])(",
+        "test.describe(",
+    ];
+    for form in forms {
+        let dir = TempDir::new().unwrap();
+        let body = format!(
+            "import {{ test, it }} from 'vitest';\n\n{form}('a', () => {{}});\nit('b', () => {{}});\n"
+        );
+        let path = dir.path().join("consistent_form.test.ts");
+        std::fs::write(&path, body).unwrap();
+        let engine = LintEngine::new(true).unwrap();
+        let violations = engine.lint_paths(&[path]).unwrap();
+        assert!(
+            find_violation(&violations, "VITEST-CON-001").is_some(),
+            "Expected VITEST-CON-001 when mixing {form} and it()"
+        );
+    }
+}
+
+#[test]
+fn con001_each_it_form_with_test_triggers() {
+    // Symmetric to the test.* coverage: every `it.*` form must set has_it=true,
+    // so that mixing it with `test(` triggers CON-001. Guards each `||` in the
+    // has_it chain against `&&` mutants.
+    let forms = [
+        "it.skip(",
+        "it.only(",
+        "it.todo(",
+        "it.concurrent(",
+        "it.each([])(",
+    ];
+    for form in forms {
+        let dir = TempDir::new().unwrap();
+        let body = format!(
+            "import {{ test, it }} from 'vitest';\n\ntest('a', () => {{}});\n{form}('b', () => {{}});\n"
+        );
+        let path = dir.path().join("consistent_it_form.test.ts");
+        std::fs::write(&path, body).unwrap();
+        let engine = LintEngine::new(true).unwrap();
+        let violations = engine.lint_paths(&[path]).unwrap();
+        assert!(
+            find_violation(&violations, "VITEST-CON-001").is_some(),
+            "Expected VITEST-CON-001 when mixing test() and {form}"
+        );
+    }
+}
+
+// --- VITEST-CON-003: ConsistentVitestViRule ---
+
+#[test]
+fn con003_vi_and_vitest_namespace_triggers() {
+    let dir = TempDir::new().unwrap();
+    let path = write_fixture(
+        &dir,
+        "mixed_vi.test.ts",
+        r#"
+import { vi } from 'vitest';
+import * as vitest from 'vitest';
+import { test } from 'vitest';
+
+test('a', () => {});
+"#,
+    );
+    let engine = LintEngine::new(true).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
+    let v = find_violation(&violations, "VITEST-CON-003");
+    assert!(
+        v.is_some(),
+        "Expected VITEST-CON-003 violation for vi + namespace mix"
+    );
+}
+
+#[test]
+fn con003_no_false_positive_on_substring_binding() {
+    // A file importing a binding whose name merely contains "vi" as a
+    // substring (e.g. `visit`) must NOT be treated as importing the `vi`
+    // mock helper. Combined with a namespace import this previously caused
+    // a false CON-003 violation.
+    let dir = TempDir::new().unwrap();
+    let path = write_fixture(
+        &dir,
+        "visit.test.ts",
+        r#"
+import * as vitest from 'vitest';
+import { visit, describe, expect } from 'vitest';
+
+describe('suite', () => {
+    visit();
+    expect(1).toBe(1);
+});
+"#,
+    );
+    let engine = LintEngine::new(true).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
+    let v = find_violation(&violations, "VITEST-CON-003");
+    assert!(
+        v.is_none(),
+        "importing `visit` (substring of vi) must NOT trigger VITEST-CON-003"
+    );
 }
 
 // --- VITEST-CON-004: HoistedApisOnTopRule ---
@@ -3032,7 +3284,7 @@ vi.mock('./foo');
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-CON-004");
     assert!(v.is_some(), "Expected VITEST-CON-004 violation");
 }
@@ -3056,7 +3308,7 @@ test('uses fake timers with inline cleanup', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-FLK-004").is_none(),
         "Should not trigger FLK-004 when test calls vi.useRealTimers() inline"
@@ -3079,7 +3331,7 @@ test('uses fake timers without cleanup', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-FLK-004").is_some(),
         "Should trigger FLK-004 when no cleanup exists"
@@ -3151,7 +3403,7 @@ test('mocks', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[test_path, source_path]).unwrap();
+    let violations = engine.lint_paths(&[test_path, source_path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-DEP-004").is_none(),
         "Should not trigger DEP-004 when factory keys match exports"
@@ -3186,7 +3438,7 @@ test('mocks', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[test_path, source_path]).unwrap();
+    let violations = engine.lint_paths(&[test_path, source_path]).unwrap();
     let v = find_violation(&violations, "VITEST-DEP-004");
     assert!(
         v.is_some(),
@@ -3222,7 +3474,7 @@ test('mocks', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[test_path, source_path]).unwrap();
+    let violations = engine.lint_paths(&[test_path, source_path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-DEP-004").is_none(),
         "Should not trigger DEP-004 when mock has fewer keys than source (missing keys are not extra)"
@@ -3249,7 +3501,7 @@ test('all weak', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-MNT-009");
     assert!(
         v.is_some(),
@@ -3274,7 +3526,7 @@ test('truthy falsy', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-MNT-009");
     assert!(
         v.is_some(),
@@ -3297,7 +3549,7 @@ test('not toThrow', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-MNT-009");
     assert!(v.is_some(), "Expected VITEST-MNT-009 for not.toThrow()");
 }
@@ -3318,7 +3570,7 @@ test('mixed', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-MNT-009").is_none(),
         "Should not trigger MNT-009 when strong assertions exist"
@@ -3342,7 +3594,7 @@ test('strong', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-MNT-009").is_none(),
         "Should not trigger MNT-009 for strong assertions"
@@ -3364,7 +3616,7 @@ test('no assertions', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-MNT-009").is_none(),
         "Should not trigger MNT-009 when no assertions exist (MNT-001 handles that)"
@@ -3396,7 +3648,7 @@ test('works', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-DEP-001");
     assert!(v.is_some(), "Expected VITEST-DEP-001 for banned mock path");
     assert!(v.unwrap().message.contains("database"));
@@ -3426,7 +3678,7 @@ test('works', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-DEP-001").is_none(),
         "Should not trigger DEP-001 for non-banned path"
@@ -3459,7 +3711,7 @@ test('works', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-DEP-002");
     assert!(
         v.is_some(),
@@ -3496,7 +3748,7 @@ test('works', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-DEP-002").is_none(),
         "Should not trigger DEP-002 for integration test files"
@@ -3523,7 +3775,7 @@ test('works', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-DEP-003");
     assert!(
         v.is_some(),
@@ -3551,7 +3803,7 @@ test('works', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-DEP-003").is_none(),
         "Should not trigger DEP-003 for vi.clearAllMocks (not an escape hatch)"
@@ -3575,7 +3827,7 @@ test('random value', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-FLK-005");
     assert!(
         v.is_some(),
@@ -3600,7 +3852,7 @@ test('deterministic', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-FLK-005").is_none(),
         "Should not trigger FLK-005 without Math.random()"
@@ -3608,11 +3860,6 @@ test('deterministic', () => {
 }
 
 // --- VITEST-MNT-010: Implementation Coupled ---
-// NOTE: MNT-010 is currently broken — module.imports contains full import statements
-// (e.g., "import { x } from './mod'"), not just source strings. The rule filters on
-// starts_with("vitest") etc., which never matches because statements start with "import".
-// MNT-010 triggers when a test file imports exactly one production module and test names
-// mirror export names.
 #[test]
 fn mnt010_implementation_coupled_triggers() {
     let dir = TempDir::new().unwrap();
@@ -3636,7 +3883,7 @@ test('subtract', () => { expect(subtract(5, 3)).toBe(2); });
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _diagnostics) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-MNT-010").is_some(),
         "MNT-010 should trigger: single production import, test names match export names"
@@ -3658,7 +3905,7 @@ test.only('focused pw test', async ({ page }) => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-MNT-007");
     assert!(
         v.is_some(),
@@ -3684,7 +3931,7 @@ test.describe.only('focused group', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-MNT-007");
     assert!(
         v.is_some(),
@@ -3700,17 +3947,23 @@ fn vitest_rules_do_not_fire_on_playwright_files() {
         "pw-clean.spec.ts",
         r#"
 import { test, expect } from '@playwright/test';
+import axios from 'axios';
 
-test('clean pw test', async ({ page }) => {
+test('pw test with vitest-only triggers', async ({ page }) => {
+    setTimeout(() => {}, 100);
     await expect(page).toHaveTitle(/app/);
 });
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
+    // These rules use the default `applies_to_runtime` (Vitest-only) and so
+    // must NOT fire on a Playwright file, even when their trigger patterns
+    // are present. This guards the default `runtime != Playwright` guard.
     let vitest_only_rule_ids = [
         "VITEST-FLK-001",
         "VITEST-FLK-002",
+        "VITEST-FLK-003",
         "VITEST-MNT-002",
         "VITEST-MNT-003",
         "VITEST-MNT-004",
@@ -3743,7 +3996,7 @@ test('no assertions pw', async ({ page }) => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-MNT-001");
     assert!(
         v.is_some(),
@@ -3769,7 +4022,7 @@ test('uses global fetch', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-MNT-008");
     assert!(
         v.is_some(),
@@ -3794,7 +4047,7 @@ test('uses stubbed fetch', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-MNT-008");
     assert!(
         v.is_some(),
@@ -3818,7 +4071,7 @@ test('xpath locator', async ({ page }) => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-PW-003").is_some(),
         "PW-003 should flag xpath= prefix in locator"
@@ -3841,7 +4094,7 @@ test('id selector', async ({ page }) => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-PW-002").is_some(),
         "PW-002 should flag CSS ID selector"
@@ -3863,7 +4116,7 @@ test('evaluate inner text', async ({ page }) => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-PW-006").is_some(),
         "PW-006 should flag page.evaluate with innerText"
@@ -3886,7 +4139,7 @@ test('chained css selectors', async ({ page }) => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     assert!(
         find_violation(&violations, "VITEST-PW-011").is_some(),
         "PW-011 should flag hard CSS class chain"
@@ -3902,7 +4155,7 @@ fn mnt007_playwright_fixture_violates() {
     assert!(input_path.exists(), "Fixture input file should exist");
 
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _) = engine.lint_paths(&[input_path]).unwrap();
+    let violations = engine.lint_paths(&[input_path]).unwrap();
 
     let mnt007: Vec<_> = violations
         .iter()
@@ -3941,7 +4194,7 @@ test('waits with promise setTimeout', async () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-FLK-001");
     assert!(
         v.is_some(),
@@ -3971,7 +4224,7 @@ test('finds element by testid', async ({ page }) => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-MNT-011");
     assert!(
         v.is_some(),
@@ -3995,7 +4248,7 @@ test('map size', () => {
 "#,
     );
     let engine = LintEngine::new(true).unwrap();
-    let (violations, _) = engine.lint_paths(&[path]).unwrap();
+    let violations = engine.lint_paths(&[path]).unwrap();
     let v = find_violation(&violations, "VITEST-PREF-003");
     assert!(
         v.is_some(),

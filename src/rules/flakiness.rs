@@ -136,9 +136,14 @@ impl Rule for NetworkImportRule {
         _graph: &ModuleGraph,
     ) -> Vec<Violation> {
         let mut found = false;
-        for imp in &module.imports {
+        for imp in &module.imports_parsed {
+            // Strip a `node:` prefix so built-ins like `node:http` match the
+            // bare specifier list. Compare the full specifier exactly to avoid
+            // false positives like `./utils/fetcher` or named imports whose
+            // local binding textually contains a lib name (e.g. `HttpError`).
+            let src = imp.source.trim_start_matches("node:");
             for lib in NETWORK_LIBS {
-                if imp.contains(lib) {
+                if src == *lib {
                     found = true;
                     break;
                 }

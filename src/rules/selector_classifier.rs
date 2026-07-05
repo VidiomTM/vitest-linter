@@ -90,6 +90,28 @@ mod tests {
     }
 
     #[test]
+    fn classifies_chained_class_plus_combinator() {
+        // Single class token but a ` + ` combinator must still classify as
+        // ChainedClass. Guards the `||` (not `&&`) in the combinator check.
+        assert_eq!(classify_selector("div + span"), SelectorClass::ChainedClass);
+        assert_eq!(
+            classify_selector("label + input"),
+            SelectorClass::ChainedClass
+        );
+    }
+
+    #[test]
+    fn classifies_chained_class_tilde_combinator() {
+        // Single class token but a ` ~ ` general sibling combinator must still
+        // classify as ChainedClass.
+        assert_eq!(classify_selector("h1 ~ p"), SelectorClass::ChainedClass);
+        assert_eq!(
+            classify_selector("label ~ span"),
+            SelectorClass::ChainedClass
+        );
+    }
+
+    #[test]
     fn classifies_testid() {
         assert_eq!(
             classify_selector("[data-testid=\"submit\"]"),

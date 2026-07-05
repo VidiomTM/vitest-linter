@@ -5,7 +5,7 @@ use rayon::prelude::*;
 use walkdir::WalkDir;
 
 use crate::config::{Config, TsConfig};
-use crate::models::{Diagnostic, ModuleGraph, ParsedModule, Violation};
+use crate::models::{ModuleGraph, ParsedModule, Violation};
 use crate::parser::TsParser;
 use crate::rules::{all_rules, v1_0_rules, LintContext, Rule};
 use crate::suppression::SuppressionMap;
@@ -19,7 +19,6 @@ pub struct LintEngine {
 
 impl LintEngine {
     /// Create a new engine backed by a tree-sitter TypeScript parser.
-    #[allow(clippy::missing_errors_doc)]
     pub fn new(unstable_rules: bool) -> anyhow::Result<Self> {
         Ok(Self {
             parser: TsParser::new()?,
@@ -71,11 +70,7 @@ impl LintEngine {
     /// Two-phase pipeline:
     /// 1. Parallel parse test files + source modules, build ModuleGraph
     /// 2. Parallel rule evaluation per-file with shared ModuleGraph
-    #[allow(clippy::missing_errors_doc)]
-    pub fn lint_paths(
-        &self,
-        paths: &[PathBuf],
-    ) -> anyhow::Result<(Vec<Violation>, Vec<Diagnostic>)> {
+    pub fn lint_paths(&self, paths: &[PathBuf]) -> anyhow::Result<Vec<Violation>> {
         let files = Self::discover_files(paths);
 
         // Phase 1: Parse test files in parallel
@@ -102,7 +97,7 @@ impl LintEngine {
         // Phase 2: Rule evaluation with shared ModuleGraph
         let violations = evaluate_rules(&groups, &rules, &modules, &suppressions, &graph);
 
-        Ok((violations, Vec::new()))
+        Ok(violations)
     }
 
     /// Phase 1: parse test files in parallel, returning modules and their source text.

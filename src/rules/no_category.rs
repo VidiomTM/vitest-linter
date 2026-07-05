@@ -123,6 +123,18 @@ impl Rule for NoIdenticalTitleRule {
 
 pub struct NoCommentedOutTestsRule;
 
+/// Collapse the whitespace immediately following a line-comment marker so that
+/// `//test(`, `//   test(`, and `// test(` are all matched by the `// test(`
+/// pattern set. Returns the input unchanged when no `//` marker is present.
+fn normalize_comment_spacing(line: &str) -> String {
+    if let Some(rest) = line.strip_prefix("//") {
+        let trimmed_rest = rest.trim_start();
+        format!("// {trimmed_rest}")
+    } else {
+        line.to_string()
+    }
+}
+
 const COMMENTED_TEST_PATTERNS: &[&str] = &[
     "// test(",
     "// test.skip(",
@@ -161,8 +173,12 @@ impl Rule for NoCommentedOutTestsRule {
         let mut violations = Vec::new();
         for (line_idx, line) in source.lines().enumerate() {
             let trimmed = line.trim();
+            // Normalize the comment marker so `//test(` and `//   test(`
+            // both match the `// test(` patterns. Only the run of whitespace
+            // immediately following `//` is collapsed to a single space.
+            let normalized = normalize_comment_spacing(trimmed);
             for pattern in COMMENTED_TEST_PATTERNS {
-                if trimmed.contains(pattern) {
+                if normalized.contains(pattern) {
                     violations.push(Violation {
                         rule_id: self.id().to_string(),
                         rule_name: self.name().to_string(),

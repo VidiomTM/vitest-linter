@@ -28,16 +28,51 @@ struct Context {
     global_stubs: Vec<GlobalStub>,
 }
 
+/// Immutable state threaded through the tree-walk that does not vary per call.
+struct WalkCtx<'a> {
+    source: &'a str,
+    path: &'a Path,
+    describe_depth: usize,
+    scope: MockScope,
+}
+
+impl<'a> WalkCtx<'a> {
+    fn with_scope(&self, scope: MockScope) -> Self {
+        Self {
+            source: self.source,
+            path: self.path,
+            describe_depth: self.describe_depth,
+            scope,
+        }
+    }
+
+    fn with_depth(&self, describe_depth: usize) -> Self {
+        Self {
+            source: self.source,
+            path: self.path,
+            describe_depth,
+            scope: self.scope,
+        }
+    }
+}
+
+/// Per-call metadata extracted from the callee node.
+struct CallInfo<'a> {
+    func_name: &'a str,
+    full_callee: &'a str,
+    is_skip: bool,
+    is_only: bool,
+    node: Node<'a>,
+}
+
 impl TsParser {
     /// Create a new parser instance.
-    #[allow(clippy::missing_errors_doc)]
     pub const fn new() -> anyhow::Result<Self> {
         Ok(Self)
     }
 
     /// Parse a single test file at `path` and return the extracted module
     /// metadata (test blocks, imports, mocks, hooks, etc.).
-    #[allow(clippy::missing_errors_doc)]
     pub fn parse_file(&self, path: &Path) -> anyhow::Result<ParsedModule> {
         let mut parser = Parser::new();
         let ext = path
@@ -60,7 +95,16 @@ impl TsParser {
         let root = tree.root_node();
         let mut ctx = Context::default();
 
-        Self::collect(root, &source, path, 0, MockScope::Module, &mut ctx);
+        Self::collect(
+            root,
+            &WalkCtx {
+                source: &source,
+                path,
+                describe_depth: 0,
+                scope: MockScope::Module,
+            },
+            &mut ctx,
+        );
 
         let has_fake_timers = source.contains("useFakeTimers");
 
@@ -86,35 +130,28 @@ impl TsParser {
         })
     }
 
-    fn collect(
-        node: Node,
-        source: &str,
-        path: &Path,
-        describe_depth: usize,
-        scope: MockScope,
-        ctx: &mut Context,
-    ) {
+    fn collect(node: Node, walk: &WalkCtx<'_>, ctx: &mut Context) {
         for i in 0..node.named_child_count() {
             let Some(child) = node.named_child(i) else {
                 continue;
             };
             match child.kind() {
                 "import_statement" => {
-                    Self::collect_import_statement(child, source, ctx);
+                    Self::collect_import_statement(child, walk.source, ctx);
                 }
                 "call_expression" => {
-                    Self::handle_call(child, source, path, describe_depth, scope, ctx);
+                    Self::handle_call(child, walk, ctx);
                 }
                 "expression_statement" => {
-                    Self::collect_global_stub_assignment(&child, source, ctx);
-                    Self::collect(child, source, path, describe_depth, scope, ctx);
+                    Self::collect_global_stub_assignment(&child, walk.source, ctx);
+                    Self::collect(child, walk, ctx);
                 }
                 "lexical_declaration" | "variable_declaration" => {
-                    Self::collect_global_stub_declaration(&child, source, ctx);
-                    Self::collect(child, source, path, describe_depth, scope, ctx);
+                    Self::collect_global_stub_declaration(&child, walk.source, ctx);
+                    Self::collect(child, walk, ctx);
                 }
                 _ => {
-                    Self::collect(child, source, path, describe_depth, scope, ctx);
+                    Self::collect(child, walk, ctx);
                 }
             }
         }
@@ -201,43 +238,32 @@ impl TsParser {
         }
     }
 
-    fn handle_call(
-        node: Node,
-        source: &str,
-        path: &Path,
-        describe_depth: usize,
-        scope: MockScope,
-        ctx: &mut Context,
-    ) {
+    fn handle_call(node: Node, walk: &WalkCtx<'_>, ctx: &mut Context) {
         let Some(func_node) = node.child_by_field_name("function") else {
-            Self::collect(node, source, path, describe_depth, scope, ctx);
+            Self::collect(node, walk, ctx);
             return;
         };
 
-        let (func_name, is_skip, is_only) = Self::parse_callee(func_node, source);
+        let (func_name, is_skip, is_only) = Self::parse_callee(func_node, walk.source);
         let full_callee = func_node
-            .utf8_text(source.as_bytes())
+            .utf8_text(walk.source.as_bytes())
             .unwrap_or("")
             .to_string();
 
-        Self::track_expect_outside_test(&func_name, scope, node, ctx);
-        Self::track_snapshot_calls(&full_callee, node, source, ctx);
-        Self::track_vi_mock(&full_callee, node, source, scope, ctx);
-        Self::track_vi_stub_global(&full_callee, node, source, ctx);
-        Self::track_pw_runtime(ctx, &full_callee, node, source);
-
-        Self::dispatch_call(
-            &func_name,
-            &full_callee,
+        let info = CallInfo {
+            func_name: &func_name,
+            full_callee: &full_callee,
             is_skip,
             is_only,
             node,
-            source,
-            path,
-            describe_depth,
-            scope,
-            ctx,
-        );
+        };
+        Self::track_expect_outside_test(info.func_name, walk.scope, node, ctx);
+        Self::track_snapshot_calls(info.full_callee, node, walk.source, ctx);
+        Self::track_vi_mock(info.full_callee, node, walk.source, walk.scope, ctx);
+        Self::track_vi_stub_global(info.full_callee, node, walk.source, ctx);
+        Self::track_pw_runtime(ctx, info.full_callee, node, walk.source);
+
+        Self::dispatch_call(&info, walk, ctx);
     }
 
     fn track_expect_outside_test(func_name: &str, scope: MockScope, node: Node, ctx: &mut Context) {
@@ -308,97 +334,54 @@ impl TsParser {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn dispatch_call(
-        func_name: &str,
-        full_callee: &str,
-        is_skip: bool,
-        is_only: bool,
-        node: Node,
-        source: &str,
-        path: &Path,
-        describe_depth: usize,
-        scope: MockScope,
-        ctx: &mut Context,
-    ) {
-        match func_name {
+    fn dispatch_call(info: &CallInfo<'_>, walk: &WalkCtx<'_>, ctx: &mut Context) {
+        match info.func_name {
             "test" | "it" | "fit" | "xit" => {
-                Self::dispatch_test_call(
-                    full_callee,
-                    is_skip,
-                    is_only,
-                    node,
-                    source,
-                    path,
-                    describe_depth,
-                    scope,
-                    ctx,
-                );
+                Self::dispatch_test_call(info, walk, ctx);
             }
             "describe" | "fdescribe" | "xdescribe" => {
-                Self::add_describe_block(node, source, path, describe_depth, is_only, scope, ctx);
+                Self::add_describe_block(info.node, walk, info.is_only, ctx);
             }
             "beforeEach" | "afterEach" | "beforeAll" | "afterAll" => {
-                Self::dispatch_hook_call(func_name, node, source, path, describe_depth, ctx);
+                Self::dispatch_hook_call(info.func_name, info.node, walk, ctx);
             }
             _ => {
-                Self::collect(node, source, path, describe_depth, scope, ctx);
+                Self::collect(info.node, walk, ctx);
             }
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn dispatch_test_call(
-        full_callee: &str,
-        is_skip: bool,
-        is_only: bool,
-        node: Node,
-        source: &str,
-        path: &Path,
-        describe_depth: usize,
-        scope: MockScope,
-        ctx: &mut Context,
-    ) {
-        if full_callee.starts_with("test.describe") {
-            Self::add_describe_block(node, source, path, describe_depth, is_only, scope, ctx);
+    fn dispatch_test_call(info: &CallInfo<'_>, walk: &WalkCtx<'_>, ctx: &mut Context) {
+        if info.full_callee.starts_with("test.describe") {
+            Self::add_describe_block(info.node, walk, info.is_only, ctx);
         } else {
-            let uses_fit_or_xit = full_callee.starts_with("fit") || full_callee.starts_with("xit");
-            if let Some(tb) = Self::extract_test(
-                node,
-                source,
-                path,
-                describe_depth,
-                is_skip,
-                is_only,
-                uses_fit_or_xit,
-            ) {
+            let uses_fit_or_xit =
+                info.full_callee.starts_with("fit") || info.full_callee.starts_with("xit");
+            if let Some(tb) =
+                Self::extract_test(info.node, walk, info.is_skip, info.is_only, uses_fit_or_xit)
+            {
                 ctx.test_blocks.push(tb);
             }
-            if let Some(body) = Self::callback_body(node) {
-                Self::collect(body, source, path, describe_depth, MockScope::Test, ctx);
+            if let Some(body) = Self::callback_body(info.node) {
+                let inner = walk.with_scope(MockScope::Test);
+                Self::collect(body, &inner, ctx);
             }
         }
     }
 
-    fn dispatch_hook_call(
-        func_name: &str,
-        node: Node,
-        source: &str,
-        path: &Path,
-        describe_depth: usize,
-        ctx: &mut Context,
-    ) {
+    fn dispatch_hook_call(func_name: &str, node: Node, walk: &WalkCtx<'_>, ctx: &mut Context) {
         let kind = match func_name {
             "beforeEach" => HookKind::BeforeEach,
             "afterEach" => HookKind::AfterEach,
             "beforeAll" => HookKind::BeforeAll,
             "afterAll" => HookKind::AfterAll,
-            _ => unreachable!(),
+            _ => return,
         };
         let mut vi_calls = Vec::new();
         if let Some(body) = Self::single_callback_body(node) {
-            Self::collect_vi_calls(body, source, &mut vi_calls);
-            Self::collect(body, source, path, describe_depth, MockScope::Hook, ctx);
+            Self::collect_vi_calls(body, walk.source, &mut vi_calls);
+            let inner = walk.with_scope(MockScope::Hook);
+            Self::collect(body, &inner, ctx);
         }
         ctx.hook_calls.push(HookCall {
             kind,
@@ -885,9 +868,10 @@ impl TsParser {
             }
             "member_expression" => {
                 let full = node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
-                let is_skip = full.contains(".skip") || full.contains(".todo");
-                let is_only = full.contains(".only");
-                let base = full.split('.').next().unwrap_or("").to_string();
+                let segments = full.split('.').collect::<Vec<_>>();
+                let base = segments.first().copied().unwrap_or("").to_string();
+                let is_skip = segments.iter().any(|s| matches!(*s, "skip" | "todo"));
+                let is_only = segments.contains(&"only");
                 (base, is_skip, is_only)
             }
             _ => (String::new(), false, false),
@@ -919,20 +903,12 @@ impl TsParser {
         Self::func_body(callback)
     }
 
-    fn add_describe_block(
-        node: Node,
-        source: &str,
-        path: &Path,
-        describe_depth: usize,
-        is_only: bool,
-        scope: MockScope,
-        ctx: &mut Context,
-    ) {
+    fn add_describe_block(node: Node, walk: &WalkCtx<'_>, is_only: bool, ctx: &mut Context) {
         let name_node = node
             .child_by_field_name("arguments")
             .and_then(|args| args.named_child(0));
         let name = name_node
-            .and_then(|n| Self::string_value(n, source))
+            .and_then(|n| Self::string_value(n, walk.source))
             .unwrap_or_default();
         let title_is_template_literal = name_node.is_some_and(|n| n.kind() == "template_string");
         let title_is_empty = name.is_empty();
@@ -940,23 +916,24 @@ impl TsParser {
             .child_by_field_name("arguments")
             .and_then(|args| Self::find_callback_in_args(args))
             .is_some_and(|cb| {
-                let text = cb.utf8_text(source.as_bytes()).unwrap_or("");
+                let text = cb.utf8_text(walk.source.as_bytes()).unwrap_or("");
                 text.trim_start().starts_with("async")
             });
         ctx.describe_blocks.push(DescribeBlock {
             name,
-            file_path: path.to_path_buf(),
+            file_path: walk.path.to_path_buf(),
             line: node.start_position().row + 1,
             is_only,
-            depth: describe_depth,
+            depth: walk.describe_depth,
             title_is_template_literal,
             title_is_empty,
             is_async,
         });
         if let Some(body) = Self::callback_body(node) {
-            Self::collect(body, source, path, describe_depth + 1, scope, ctx);
+            let inner = walk.with_depth(walk.describe_depth + 1);
+            Self::collect(body, &inner, ctx);
         } else {
-            Self::collect(node, source, path, describe_depth, scope, ctx);
+            Self::collect(node, walk, ctx);
         }
     }
 
@@ -975,9 +952,7 @@ impl TsParser {
 
     fn extract_test(
         node: Node,
-        source: &str,
-        path: &Path,
-        describe_depth: usize,
+        walk: &WalkCtx<'_>,
         is_skip: bool,
         is_only: bool,
         uses_fit_or_xit: bool,
@@ -988,11 +963,26 @@ impl TsParser {
         }
 
         let name_node = args.named_child(0)?;
-        let name = Self::string_value(name_node, source)?;
+        // Non-string test names (e.g. `test(123)`, `test(someVar)`) cannot be
+        // resolved to a literal via `string_value`. For dynamic identifier or
+        // numeric names, fall back to the raw node text instead of dropping
+        // the test from analysis entirely. Other kinds (arrays, ERROR nodes
+        // from malformed parses, etc.) still bail to preserve prior behavior.
+        let name = match Self::string_value(name_node, walk.source) {
+            Some(s) => s,
+            None => match name_node.kind() {
+                "identifier" | "number" => name_node
+                    .utf8_text(walk.source.as_bytes())
+                    .ok()
+                    .map(|t| t.to_string())
+                    .unwrap_or_else(|| "<non-string>".to_string()),
+                _ => return None,
+            },
+        };
 
         let body = Self::find_callback_in_args(args).and_then(Self::func_body);
 
-        let st = body.map_or_else(Analysis::default, |b| Self::analyze(b, source));
+        let st = body.map_or_else(Analysis::default, |b| Self::analyze(b, walk.source));
 
         let title_is_template_literal = args
             .named_child(0)
@@ -1002,11 +992,11 @@ impl TsParser {
         let has_done_callback = node
             .child_by_field_name("arguments")
             .and_then(|args| Self::find_callback_in_args(args))
-            .is_some_and(|cb| Self::has_done_param(cb, source));
+            .is_some_and(|cb| Self::has_done_param(cb, walk.source));
 
         Some(TestBlock {
             name,
-            file_path: path.to_path_buf(),
+            file_path: walk.path.to_path_buf(),
             line: node.start_position().row + 1,
             has_assertions: st.assertion_count > 0,
             assertion_count: st.assertion_count,
@@ -1018,7 +1008,7 @@ impl TsParser {
             has_multiple_expects: st.assertion_count > 1,
             is_skipped: is_skip,
             is_only,
-            is_nested: describe_depth > 3,
+            is_nested: walk.describe_depth > 3,
             has_return_statement: st.has_return,
             unawaited_async_assertions: st.unawaited_async_assertions,
             uses_fake_timers: st.uses_fake_timers,
@@ -1163,7 +1153,9 @@ impl TsParser {
     }
 
     fn walk_call_expression(node: Node, source: &str, st: &mut Analysis) {
-        let func = node.child_by_field_name("function").unwrap();
+        let Some(func) = node.child_by_field_name("function") else {
+            return;
+        };
         let text = func.utf8_text(source.as_bytes()).unwrap_or("");
         let is_expect_call = func.kind() == "identifier" && text == "expect";
 
@@ -1175,9 +1167,13 @@ impl TsParser {
 
         Self::walk_call_flags(node, text, st);
 
-        let args = node.child_by_field_name("arguments").unwrap();
+        let Some(args) = node.child_by_field_name("arguments") else {
+            return;
+        };
         for i in 0..args.named_child_count() {
-            let child = args.named_child(i).unwrap();
+            let Some(child) = args.named_child(i) else {
+                continue;
+            };
             Self::walk_body(child, source, st);
         }
     }
@@ -1241,7 +1237,9 @@ impl TsParser {
     }
 
     fn walk_new_expression(node: Node, source: &str, st: &mut Analysis) {
-        let ctor = node.child_by_field_name("constructor").unwrap();
+        let Some(ctor) = node.child_by_field_name("constructor") else {
+            return;
+        };
         let ctor_text = ctor.utf8_text(source.as_bytes()).unwrap_or("");
         if ctor_text == "Date" {
             st.uses_datemock = true;
@@ -1252,7 +1250,9 @@ impl TsParser {
         }
         if let Some(args) = node.child_by_field_name("arguments") {
             for i in 0..args.named_child_count() {
-                let child = args.named_child(i).unwrap();
+                let Some(child) = args.named_child(i) else {
+                    continue;
+                };
                 Self::walk_body(child, source, st);
             }
         }
@@ -1411,7 +1411,6 @@ impl TsParser {
 }
 
 #[derive(Default)]
-#[allow(clippy::struct_excessive_bools)]
 struct Analysis {
     assertion_count: usize,
     has_conditional: bool,
@@ -1506,6 +1505,36 @@ test.skip('skipped', () => {
 
         assert_eq!(module.test_blocks.len(), 1);
         assert!(module.test_blocks[0].is_skipped);
+    }
+
+    #[test]
+    fn parse_callee_skip_is_segment_exact_not_substring() {
+        // Guards against a substring regression: `.contains(".skip")` would
+        // wrongly mark `test.skipReason(...)` as a skipped test. The skip/todo
+        // flags must match a full segment exactly.
+        let dir = write_temp(
+            r#"
+import { test, expect } from 'vitest';
+
+test.skipReason('not a real skip modifier', () => {
+    expect(1).toBe(1);
+});
+"#,
+            "skip-substring.test.ts",
+        );
+        let path = dir.path().join("skip-substring.test.ts");
+        let parser = TsParser::new().unwrap();
+        let module = parser.parse_file(&path).unwrap();
+
+        assert_eq!(
+            module.test_blocks.len(),
+            1,
+            "test.skipReason(...) should still be parsed as a test block"
+        );
+        assert!(
+            !module.test_blocks[0].is_skipped,
+            "test.skipReason must NOT set is_skipped — segment match is exact, not substring"
+        );
     }
 
     #[test]

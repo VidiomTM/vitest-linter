@@ -1,11 +1,12 @@
-const { execFileSync } = require("child_process");
-const path = require("path");
-const fs = require("fs");
+const { execFileSync } = require("node:child_process");
+const path = require("node:path");
+const fs = require("node:fs");
 
 const cache = new Map();
 
 function findBinary() {
-  const binName = process.platform === "win32" ? "vitest-linter.exe" : "vitest-linter";
+  const binName =
+    process.platform === "win32" ? "vitest-linter.exe" : "vitest-linter";
 
   const local = path.resolve(__dirname, "..", "node_modules", ".bin", binName);
   try {
@@ -41,7 +42,7 @@ function getViolations(filePath) {
     return cache.get(cacheKey);
   }
 
-  const violations = {};
+  const violations = [];
   try {
     const bin = getBinary();
     const result = execFileSync(bin, ["--format", "json", normalized], {
@@ -51,11 +52,10 @@ function getViolations(filePath) {
     });
     const raw = JSON.parse(result);
     for (const v of raw) {
-      if (!violations[v.rule_id]) violations[v.rule_id] = [];
-      violations[v.rule_id].push(v);
+      violations.push(v);
     }
   } catch {
-    // Return empty map on error
+    // Return empty list on error
   }
 
   cache.set(cacheKey, violations);

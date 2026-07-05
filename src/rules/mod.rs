@@ -58,21 +58,21 @@ pub mod validation;
 #[must_use]
 pub fn v1_0_rules() -> Vec<Box<dyn Rule>> {
     vec![
-        // NoOnlyRule — it.only / describe.only left in committed code
+        // FocusedTestRule — it.only / describe.only left in committed code
         Box::new(maintenance::FocusedTestRule),
-        // NoSkipRule — it.skip / test.todo left in source
+        // EmptyTestRule — it.skip / test.todo left in source
         Box::new(maintenance::EmptyTestRule),
-        // NoCommentedTestsRule — commented-out test bodies
+        // NoCommentedOutTestsRule — commented-out test bodies
         Box::new(no_category::NoCommentedOutTestsRule),
-        // AsyncWithoutAwaitRule — async test with no await (silent pass)
+        // MissingAwaitAssertionRule — async test with no await (silent pass)
         Box::new(maintenance::MissingAwaitAssertionRule),
-        // SetTimeoutInTestRule — real setTimeout in tests (flaky-time)
+        // TimeoutRule — real setTimeout in tests (flaky-time)
         Box::new(flakiness::TimeoutRule),
-        // MissingExpectInTryRule — try block with no expect.fail in catch
+        // TryCatchRule — try block with no expect.fail in catch
         Box::new(maintenance::TryCatchRule),
-        // SharedDescribeStateRule — conditional logic / state leakage in describe
+        // ConditionalLogicRule — conditional logic / state leakage in describe
         Box::new(maintenance::ConditionalLogicRule),
-        // BeforeEachAfterFirstItRule — hooks declared after first test
+        // PreferHooksOnTopRule — hooks declared after first test
         Box::new(prefer::PreferHooksOnTopRule),
     ]
 }
@@ -188,14 +188,14 @@ mod tests {
         let rules = v1_0_rules();
         let ids: Vec<&str> = rules.iter().map(|r| r.id()).collect();
         let expected = [
-            "VITEST-MNT-007",  // FocusedTestRule (NoOnlyRule)
-            "VITEST-MNT-005",  // EmptyTestRule (NoSkipRule)
+            "VITEST-MNT-007",  // FocusedTestRule
+            "VITEST-MNT-005",  // EmptyTestRule
             "VITEST-NO-003",   // NoCommentedOutTestsRule
-            "VITEST-MNT-006",  // MissingAwaitAssertionRule (AsyncWithoutAwaitRule)
-            "VITEST-FLK-001",  // TimeoutRule (SetTimeoutInTestRule)
-            "VITEST-MNT-004",  // TryCatchRule (MissingExpectInTryRule)
-            "VITEST-MNT-003",  // ConditionalLogicRule (SharedDescribeStateRule)
-            "VITEST-PREF-009", // PreferHooksOnTopRule (BeforeEachAfterFirstItRule)
+            "VITEST-MNT-006",  // MissingAwaitAssertionRule
+            "VITEST-FLK-001",  // TimeoutRule
+            "VITEST-MNT-004",  // TryCatchRule
+            "VITEST-MNT-003",  // ConditionalLogicRule
+            "VITEST-PREF-009", // PreferHooksOnTopRule
         ];
         for id in &expected {
             assert!(ids.contains(id), "Missing v1.0 rule: {}", id);
@@ -274,6 +274,134 @@ mod tests {
         unique.sort();
         unique.dedup();
         assert_eq!(ids.len(), unique.len(), "Duplicate rule IDs found");
+    }
+
+    /// Cross-check: the set of rule IDs implemented in Rust must exactly match
+    /// the set exposed by the ESLint plugin (`eslint-plugin-vitest-linter/lib/rules.js`).
+    /// This test embeds the eslint rule IDs so that any drift (a rule added on
+    /// one side but not the other, or a mismatched ID like the pw-page-dollar /
+    /// VITEST-PW-010 bug) is caught at test time. When adding/removing a rule,
+    /// update both this list and `eslint-plugin-vitest-linter/lib/rules.js`.
+    #[test]
+    fn rust_rule_ids_match_eslint_plugin_map() {
+        let rust_ids: std::collections::BTreeSet<&str> =
+            all_rules().iter().map(|r| r.id()).collect();
+
+        // Mirrors eslint-plugin-vitest-linter/lib/rules.js ruleId values.
+        let eslint_ids: std::collections::BTreeSet<&str> = [
+            "VITEST-FLK-001",
+            "VITEST-FLK-002",
+            "VITEST-FLK-003",
+            "VITEST-FLK-004",
+            "VITEST-FLK-005",
+            "VITEST-MNT-001",
+            "VITEST-MNT-002",
+            "VITEST-MNT-003",
+            "VITEST-MNT-004",
+            "VITEST-MNT-005",
+            "VITEST-STR-001",
+            "VITEST-STR-002",
+            "VITEST-MNT-006",
+            "VITEST-MNT-007",
+            "VITEST-MNT-008",
+            "VITEST-MNT-009",
+            "VITEST-MNT-010",
+            "VITEST-MNT-011",
+            "VITEST-DEP-001",
+            "VITEST-DEP-002",
+            "VITEST-DEP-003",
+            "VITEST-DEP-004",
+            "VITEST-VAL-001",
+            "VITEST-VAL-002",
+            "VITEST-VAL-003",
+            "VITEST-VAL-004",
+            "VITEST-VAL-005",
+            "VITEST-NO-001",
+            "VITEST-NO-002",
+            "VITEST-NO-003",
+            "VITEST-NO-005",
+            "VITEST-NO-006",
+            "VITEST-NO-007",
+            "VITEST-NO-008",
+            "VITEST-NO-009",
+            "VITEST-NO-013",
+            "VITEST-NO-014",
+            "VITEST-PREF-001",
+            "VITEST-PREF-002",
+            "VITEST-PREF-003",
+            "VITEST-PREF-005",
+            "VITEST-PREF-007",
+            "VITEST-PREF-009",
+            "VITEST-PREF-010",
+            "VITEST-PREF-012",
+            "VITEST-PREF-013",
+            "VITEST-PREF-014",
+            "VITEST-REQ-001",
+            "VITEST-REQ-002",
+            "VITEST-REQ-003",
+            "VITEST-CON-001",
+            "VITEST-CON-003",
+            "VITEST-CON-004",
+            "VITEST-PW-001",
+            "VITEST-PW-002",
+            "VITEST-PW-003",
+            "VITEST-PW-004",
+            "VITEST-PW-005",
+            "VITEST-PW-006",
+            "VITEST-PW-007",
+            "VITEST-PW-008",
+            "VITEST-PW-009",
+            "VITEST-PW-010",
+            "VITEST-PW-011",
+            "VITEST-PW-012",
+            "VITEST-PW-100",
+        ]
+        .into_iter()
+        .collect();
+
+        assert_eq!(
+            rust_ids, eslint_ids,
+            "Rust rule IDs and ESLint plugin rule IDs must match exactly"
+        );
+    }
+
+    /// Cross-check (file-scraping): read `eslint-plugin-vitest-linter/lib/rules.js`
+    /// as text and assert every Rust `all_rules()` ID appears as a `ruleId:` in
+    /// the JS file, and vice-versa. Unlike `rust_rule_ids_match_eslint_plugin_map`
+    /// (which embeds a hardcoded list), this test reads the actual JS source so
+    /// drift in *either* direction is caught without remembering to update a
+    /// third copy of the list.
+    #[test]
+    fn rust_rule_ids_match_eslint_plugin_js_file() {
+        let js_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("eslint-plugin-vitest-linter/lib/rules.js");
+        let js = std::fs::read_to_string(&js_path)
+            .unwrap_or_else(|e| panic!("could not read {}: {e}", js_path.display()));
+
+        // Extract `ruleId: "VITEST-XXX-NNN"` values from the JS source.
+        let mut js_ids: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        for line in js.lines() {
+            if let Some(rest) = line.split("ruleId:").nth(1) {
+                let rest = rest.trim_start();
+                if let Some(rest) = rest.strip_prefix('"').or_else(|| rest.strip_prefix('\'')) {
+                    if let Some(end) = rest.find(['"', '\'']) {
+                        js_ids.insert(rest[..end].to_string());
+                    }
+                }
+            }
+        }
+
+        let rust_ids: std::collections::BTreeSet<String> =
+            all_rules().iter().map(|r| r.id().to_string()).collect();
+
+        let missing_in_js: Vec<_> = rust_ids.difference(&js_ids).collect();
+        let missing_in_rust: Vec<_> = js_ids.difference(&rust_ids).collect();
+        assert!(
+            missing_in_js.is_empty() && missing_in_rust.is_empty(),
+            "rule ID drift between Rust all_rules() and eslint plugin rules.js:\n\
+             in Rust but not in JS: {missing_in_js:?}\n\
+             in JS but not in Rust: {missing_in_rust:?}"
+        );
     }
 
     #[test]
