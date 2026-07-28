@@ -75,9 +75,7 @@ impl Rule for PreferToBeRule {
         _ctx: &crate::rules::LintContext<'_>,
         _graph: &ModuleGraph,
     ) -> Vec<Violation> {
-        let Ok(source) = std::fs::read_to_string(&module.file_path) else {
-            return vec![];
-        };
+        let source = &module.source;
 
         let mut violations = Vec::new();
         for (line_idx, line) in source.lines().enumerate() {
@@ -143,9 +141,7 @@ impl Rule for PreferToContainRule {
         _ctx: &crate::rules::LintContext<'_>,
         _graph: &ModuleGraph,
     ) -> Vec<Violation> {
-        let Ok(source) = std::fs::read_to_string(&module.file_path) else {
-            return vec![];
-        };
+        let source = &module.source;
 
         let mut violations = Vec::new();
         for (line_idx, line) in source.lines().enumerate() {
@@ -195,9 +191,7 @@ impl Rule for PreferToHaveLengthRule {
         _ctx: &crate::rules::LintContext<'_>,
         _graph: &ModuleGraph,
     ) -> Vec<Violation> {
-        let Ok(source) = std::fs::read_to_string(&module.file_path) else {
-            return vec![];
-        };
+        let source = &module.source;
 
         let mut violations = Vec::new();
         for (line_idx, line) in source.lines().enumerate() {
@@ -263,9 +257,7 @@ impl Rule for PreferSpyOnRule {
         _ctx: &crate::rules::LintContext<'_>,
         _graph: &ModuleGraph,
     ) -> Vec<Violation> {
-        let Ok(source) = std::fs::read_to_string(&module.file_path) else {
-            return vec![];
-        };
+        let source = &module.source;
 
         let mut violations = Vec::new();
         for (line_idx, line) in source.lines().enumerate() {
@@ -321,9 +313,7 @@ impl Rule for PreferCalledOnceRule {
         _ctx: &crate::rules::LintContext<'_>,
         _graph: &ModuleGraph,
     ) -> Vec<Violation> {
-        let Ok(source) = std::fs::read_to_string(&module.file_path) else {
-            return vec![];
-        };
+        let source = &module.source;
 
         let mut violations = Vec::new();
         for (line_idx, line) in source.lines().enumerate() {
@@ -516,9 +506,7 @@ impl Rule for PreferTodoRule {
         _ctx: &crate::rules::LintContext<'_>,
         _graph: &ModuleGraph,
     ) -> Vec<Violation> {
-        let Ok(source) = std::fs::read_to_string(&module.file_path) else {
-            return vec![];
-        };
+        let source = &module.source;
 
         let mut violations = Vec::new();
 
@@ -612,9 +600,7 @@ impl Rule for PreferMockPromiseShorthandRule {
         _ctx: &crate::rules::LintContext<'_>,
         _graph: &ModuleGraph,
     ) -> Vec<Violation> {
-        let Ok(source) = std::fs::read_to_string(&module.file_path) else {
-            return vec![];
-        };
+        let source = &module.source;
 
         let mut violations = Vec::new();
         for (line_idx, line) in source.lines().enumerate() {
@@ -681,9 +667,7 @@ impl Rule for PreferExpectResolvesRule {
         _ctx: &crate::rules::LintContext<'_>,
         _graph: &ModuleGraph,
     ) -> Vec<Violation> {
-        let Ok(source) = std::fs::read_to_string(&module.file_path) else {
-            return vec![];
-        };
+        let source = &module.source;
 
         let mut violations = Vec::new();
         for (line_idx, line) in source.lines().enumerate() {

@@ -22,9 +22,7 @@ impl Rule for ConsistentTestItRule {
         _ctx: &crate::rules::LintContext<'_>,
         _graph: &ModuleGraph,
     ) -> Vec<Violation> {
-        let Ok(source) = std::fs::read_to_string(&module.file_path) else {
-            return vec![];
-        };
+        let source = &module.source;
 
         let has_test = source.lines().any(|line| {
             let trimmed = line.trim();
@@ -89,9 +87,7 @@ impl Rule for ConsistentVitestViRule {
         _ctx: &crate::rules::LintContext<'_>,
         _graph: &ModuleGraph,
     ) -> Vec<Violation> {
-        let Ok(source) = std::fs::read_to_string(&module.file_path) else {
-            return vec![];
-        };
+        let source = &module.source;
 
         let has_vi_import = module
             .imports_parsed
@@ -234,6 +230,7 @@ mod tests {
         std::fs::write(&path, content).unwrap();
         let module = ParsedModule {
             file_path: path,
+            source: content.into(),
             imports: vec![],
             imports_parsed: vec![],
             vi_mocks: vec![],

@@ -904,6 +904,7 @@ mod tests {
             runtime: crate::models::TestRuntime::Unknown,
             playwright: None,
             global_stubs: vec![],
+            ..ParsedModule::default()
         }
     }
 

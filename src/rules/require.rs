@@ -127,9 +127,7 @@ impl Rule for RequireToThrowMessageRule {
         _ctx: &crate::rules::LintContext<'_>,
         _graph: &ModuleGraph,
     ) -> Vec<Violation> {
-        let Ok(source) = std::fs::read_to_string(&module.file_path) else {
-            return vec![];
-        };
+        let source = &module.source;
 
         let mut violations = Vec::new();
 
@@ -252,6 +250,7 @@ mod tests {
             runtime: crate::models::TestRuntime::Unknown,
             playwright: None,
             global_stubs: vec![],
+            ..ParsedModule::default()
         }
     }
 
@@ -361,6 +360,7 @@ describe('grouped', () => {
 
         let module = ParsedModule {
             file_path: path.clone(),
+            source: std::fs::read_to_string(&path).unwrap().into(),
             imports: vec![],
             imports_parsed: vec![],
             vi_mocks: vec![],
@@ -514,6 +514,7 @@ expect(() => fn()).toThrow();
 
         let module = ParsedModule {
             file_path: path.clone(),
+            source: std::fs::read_to_string(&path).unwrap().into(),
             imports: vec![],
             imports_parsed: vec![],
             vi_mocks: vec![],
@@ -551,6 +552,7 @@ expect(() => fn()).toThrow(/pattern/);
 
         let module = ParsedModule {
             file_path: path.clone(),
+            source: std::fs::read_to_string(&path).unwrap().into(),
             imports: vec![],
             imports_parsed: vec![],
             vi_mocks: vec![],
@@ -584,6 +586,7 @@ expect(() => fn()).toThrow(/pattern/);
 
         let module = ParsedModule {
             file_path: path.clone(),
+            source: std::fs::read_to_string(&path).unwrap().into(),
             imports: vec![],
             imports_parsed: vec![],
             vi_mocks: vec![],
@@ -617,6 +620,7 @@ expect(() => fn()).toThrow(/pattern/);
 
         let module = ParsedModule {
             file_path: path.clone(),
+            source: std::fs::read_to_string(&path).unwrap().into(),
             imports: vec![],
             imports_parsed: vec![],
             vi_mocks: vec![],
@@ -650,6 +654,7 @@ expect(() => fn()).toThrow(/pattern/);
 
         let module = ParsedModule {
             file_path: path.clone(),
+            source: std::fs::read_to_string(&path).unwrap().into(),
             imports: vec![],
             imports_parsed: vec![],
             vi_mocks: vec![],

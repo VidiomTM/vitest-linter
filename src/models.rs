@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use serde::Serialize;
 
@@ -154,6 +155,10 @@ pub struct DescribeBlock {
 #[derive(Debug, Clone, Default)]
 pub struct ParsedModule {
     pub file_path: PathBuf,
+    /// The full source text the module was parsed from, retained so rules can
+    /// inspect it without re-reading from disk (which also silently no-op'd
+    /// for in-memory/unsaved inputs). Shared via `Arc` to keep cloning cheap.
+    pub source: Arc<str>,
     pub imports: Vec<String>,
     pub imports_parsed: Vec<ImportEntry>,
     pub vi_mocks: Vec<ViMockCall>,

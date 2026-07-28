@@ -106,7 +106,7 @@ impl LintEngine {
             .par_iter()
             .filter_map(|file| {
                 let source = std::fs::read_to_string(file).ok()?;
-                let module = self.parser.parse_file(file).ok()?;
+                let module = self.parser.parse_source(&source, file).ok()?;
                 Some((module, source))
             })
             .collect();

@@ -166,9 +166,7 @@ impl Rule for NoCommentedOutTestsRule {
         _ctx: &crate::rules::LintContext<'_>,
         _graph: &ModuleGraph,
     ) -> Vec<Violation> {
-        let Ok(source) = std::fs::read_to_string(&module.file_path) else {
-            return vec![];
-        };
+        let source = &module.source;
 
         let mut violations = Vec::new();
         for (line_idx, line) in source.lines().enumerate() {
@@ -443,9 +441,7 @@ impl Rule for NoInterpolationInSnapshotsRule {
         _ctx: &crate::rules::LintContext<'_>,
         _graph: &ModuleGraph,
     ) -> Vec<Violation> {
-        let Ok(source) = std::fs::read_to_string(&module.file_path) else {
-            return vec![];
-        };
+        let source = &module.source;
 
         let mut violations = Vec::new();
 
@@ -626,5 +622,41 @@ impl Rule for NoConditionalExpectRule {
                 test_name: Some(tb.name.clone()),
             })
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Config;
+    use crate::parser::TsParser;
+    use std::path::Path;
+
+    #[test]
+    fn commented_test_rule_reads_retained_source_without_disk() {
+        // Regression: source-reading rules used to re-read `module.file_path`
+        // from disk and silently returned no diagnostics when the path was
+        // unreadable (in-memory/unsaved inputs, stdin). They now consume the
+        // retained `module.source`, so the rule fires even when the file path
+        // does not exist on disk.
+        let parser = TsParser::new().unwrap();
+        let module = parser
+            .parse_source(
+                "// test('commented out', () => {});\n",
+                Path::new("/nonexistent/does-not-exist.test.ts"),
+            )
+            .unwrap();
+        let config = Config::default();
+        let ctx = crate::rules::LintContext {
+            config: &config,
+            all_modules: &[],
+        };
+        let v = NoCommentedOutTestsRule.check(&module, &ctx, &ModuleGraph::default());
+        assert_eq!(
+            v.len(),
+            1,
+            "rule must fire from retained source without disk"
+        );
+        assert_eq!(v[0].rule_id, "VITEST-NO-003");
     }
 }

@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::sync::Arc;
 
 use tree_sitter::{Node, Parser};
 
@@ -74,6 +75,16 @@ impl TsParser {
     /// Parse a single test file at `path` and return the extracted module
     /// metadata (test blocks, imports, mocks, hooks, etc.).
     pub fn parse_file(&self, path: &Path) -> anyhow::Result<ParsedModule> {
+        let source = std::fs::read_to_string(path)?;
+        self.parse_source(&source, path)
+    }
+
+    /// Parse test metadata from an in-memory `source` buffer attributed to
+    /// `path`. This is the disk-free entry point: the engine (which has already
+    /// read the file) and callers with in-memory/unsaved sources use it
+    /// directly. The resulting module retains `source` so rules can inspect it
+    /// without re-reading from disk.
+    pub fn parse_source(&self, source: &str, path: &Path) -> anyhow::Result<ParsedModule> {
         let mut parser = Parser::new();
         let ext = path
             .extension()
@@ -87,9 +98,8 @@ impl TsParser {
         };
         parser.set_language(&language)?;
 
-        let source = std::fs::read_to_string(path)?;
         let tree = parser
-            .parse(&source, None)
+            .parse(source, None)
             .ok_or_else(|| anyhow::anyhow!("Failed to parse file: {}", path.display()))?;
 
         let root = tree.root_node();
@@ -98,7 +108,7 @@ impl TsParser {
         Self::collect(
             root,
             &WalkCtx {
-                source: &source,
+                source,
                 path,
                 describe_depth: 0,
                 scope: MockScope::Module,
@@ -109,10 +119,11 @@ impl TsParser {
         let has_fake_timers = source.contains("useFakeTimers");
 
         let mut exports = Vec::new();
-        Self::collect_exports(root, &source, &mut exports);
+        Self::collect_exports(root, source, &mut exports);
 
         Ok(ParsedModule {
             file_path: path.to_path_buf(),
+            source: Arc::from(source),
             imports: ctx.imports,
             imports_parsed: ctx.imports_parsed,
             vi_mocks: ctx.vi_mocks,
